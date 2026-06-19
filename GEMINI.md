@@ -6,6 +6,7 @@
 * **Surgical Precision Over Broad Rebuilds:** Code with tight intentionality. Always exhaustively investigate opportunities to modify localized, specific parts of the existing codebase before blindly attempting to rebuild or rewrite an entire script or structural asset.
 * **Continuous Self-Checking & Relentless Simplicity:** Every single line of generated code must be continually cross-examined against enterprise engineering standards. Prioritize extreme simplicity, scannability, and structural elegance—avoid over-engineering or introducing unnecessary code bloat.
 * **Uncompromising User Security:** Prioritize user and system security above all else. Under no circumstances should security measures be lax, bypassed, or deferred. Secure coding patterns, strict authentication boundaries, and data safety protocols must be baked natively into every feature from line one.
+* **No Bloated Code (Strict Modularization):** Avoid bloating files and components into hundreds of lines. Prioritize modularizing the codebase into small, reusable, and easily manageable modules, helper functions, and components. This structure ensures that troubleshooting is streamlined, as bugs can be isolated and debugged within specific modules. Note: This constraint applies to all application source and execution code (e.g. TypeScript, JavaScript, Python, TSX) and is not enforced for `.md` files or other meta-documentation assets.
 
 ---
 

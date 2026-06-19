@@ -555,7 +555,7 @@ export default function Admin() {
       </header>
 
       {/* Main Layout Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedApp ? '3fr 2fr' : '1fr', gap: '2rem', transition: 'all 0.3s ease' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
         
         <ApplicationsTable
           searchQuery={searchQuery}
@@ -572,27 +572,27 @@ export default function Admin() {
           handleDeleteApplicant={handleDeleteApplicant}
         />
 
-        {selectedApp && (
-          <DetailSidebar
-            selectedApp={selectedApp}
-            setSelectedApp={setSelectedApp}
-            handleOpenEditModal={handleOpenEditModal}
-            loadingDetail={loadingDetail}
-            detailedData={detailedData}
-            editStatus={editStatus}
-            setEditStatus={setEditStatus}
-            editRegionalOffice={editRegionalOffice}
-            setEditRegionalOffice={setEditRegionalOffice}
-            editExamDate={editExamDate}
-            setEditExamDate={setEditExamDate}
-            editExamPlace={editExamPlace}
-            setEditExamPlace={setEditExamPlace}
-            handleUpdateApplication={handleUpdateApplication}
-            savingEdit={savingEdit}
-          />
-        )}
-
       </div>
+
+      {selectedApp && !showEditModal && (
+        <DetailSidebar
+          selectedApp={selectedApp}
+          setSelectedApp={setSelectedApp}
+          handleOpenEditModal={handleOpenEditModal}
+          loadingDetail={loadingDetail}
+          detailedData={detailedData}
+          editStatus={editStatus}
+          setEditStatus={setEditStatus}
+          editRegionalOffice={editRegionalOffice}
+          setEditRegionalOffice={setEditRegionalOffice}
+          editExamDate={editExamDate}
+          setEditExamDate={setEditExamDate}
+          editExamPlace={editExamPlace}
+          setEditExamPlace={setEditExamPlace}
+          handleUpdateApplication={handleUpdateApplication}
+          savingEdit={savingEdit}
+        />
+      )}
 
       {showCreateModal && (
         <CreateModal

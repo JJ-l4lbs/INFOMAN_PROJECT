@@ -4,9 +4,10 @@
 # These overarching paradigms govern every interaction, code block generation, and architectural decision.
 
 * **Surgical Precision Over Broad Rebuilds:** Code with tight intentionality. Always exhaustively investigate opportunities to modify localized, specific parts of the existing codebase before blindly attempting to rebuild or rewrite an entire script or structural asset.
-* **Continuous Self-Checking & Relentless Simplicity:** Every single line of generated code must be continually cross-examined against enterprise engineering standards. Prioritize extreme simplicity, scannability, and structural elegance—avoid over-engineering or introducing unnecessary code bloat.
+* **Simple is Best (Relentless Simplicity):** Prioritize writing the cleanest, most efficient code and algorithms while keeping the codebase simple, readable, and elegant. Every single line of generated code must be continually cross-examined against enterprise engineering standards to avoid over-engineering.
 * **Uncompromising User Security:** Prioritize user and system security above all else. Under no circumstances should security measures be lax, bypassed, or deferred. Secure coding patterns, strict authentication boundaries, and data safety protocols must be baked natively into every feature from line one.
-* **No Bloated Code (Strict Modularization):** Avoid bloating files and components into hundreds of lines. Prioritize modularizing the codebase into small, reusable, and easily manageable modules, helper functions, and components. This structure ensures that troubleshooting is streamlined, as bugs can be isolated and debugged within specific modules. Note: This constraint applies to all application source and execution code (e.g. TypeScript, JavaScript, Python, TSX) and is not enforced for `.md` files or other meta-documentation assets.
+* **More with Less (No Bloated Code):** Do not overcomplicate or bloat files into hundreds of lines. Prioritize modularizing logic into small, reusable, and easily manageable modules, helper functions, custom hooks, and components. Always check that all codebase files are strictly modularized and verify that you have not accidentally introduced bloated files when implementing a specific instruction or function. Note: This constraint applies to all application source and execution code (e.g., TypeScript, JavaScript, Python, TSX) and is not enforced for `.md` files or other meta-documentation assets.
+
 
 ---
 

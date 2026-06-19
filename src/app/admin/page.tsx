@@ -227,8 +227,8 @@ export default function Admin() {
       await adminUpdateApplication(password, {
         application_no: selectedApp.application_no,
         applicant_id: selectedApp.applicant_id,
-        educational_record_id: selectedApp.applicants?.educational_record_id,
-        employment_record_id: selectedApp.applicants?.employment_record_id || null,
+        educational_record_id: detailedData.education?.educational_record_id || selectedApp.applicants?.educational_record_id,
+        employment_record_id: detailedData.employment?.employment_record_id || selectedApp.applicants?.employment_record_id || null,
         application: {
           status: editStatus,
           exam_date: editExamDate,
@@ -458,8 +458,8 @@ export default function Admin() {
       await adminUpdateApplication(password, {
         application_no: selectedApp.application_no,
         applicant_id: selectedApp.applicant_id,
-        educational_record_id: selectedApp.applicants?.educational_record_id,
-        employment_record_id: selectedApp.applicants?.employment_record_id || null,
+        educational_record_id: detailedData?.education?.educational_record_id || selectedApp.applicants?.educational_record_id,
+        employment_record_id: detailedData?.employment?.employment_record_id || selectedApp.applicants?.employment_record_id || null,
         application: formValues.application,
         personal: formValues.personal,
         education: formValues.education,

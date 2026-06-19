@@ -3,11 +3,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Initialize server-side Supabase client using service role key to bypass RLS, with anon key fallback for local verification
 const getServiceClient = () => {
-  const keyToUse = supabaseServiceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const keyToUse = serviceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
   if (!keyToUse) {
     throw new Error('Neither SUPABASE_SERVICE_ROLE_KEY nor NEXT_PUBLIC_SUPABASE_ANON_KEY is available.');
   }
@@ -18,6 +18,7 @@ const getServiceClient = () => {
     }
   });
 };
+
 
 // Authentication check helper
 const checkAuth = (password: string) => {
@@ -209,7 +210,7 @@ export async function adminUpdateApplication(password: string, payload: {
   } = payload;
 
   // 1. Update Application table
-  const { error: appErr } = await supabase
+  const { data: appData, error: appErr } = await supabase
     .from('applications')
     .update({
       status: application.status,
@@ -218,25 +219,33 @@ export async function adminUpdateApplication(password: string, payload: {
       csr_regional_office: application.csr_regional_office,
       exam_applied_for: application.exam_applied_for
     })
-    .eq('application_no', application_no);
+    .eq('application_no', application_no)
+    .select();
   if (appErr) throw new Error('Failed to update application details: ' + appErr.message);
+  if (!appData || appData.length === 0) {
+    throw new Error('Failed to update application details: No rows updated. This may be due to Row Level Security (RLS) restrictions (missing service role key) or an invalid reference number.');
+  }
 
   // 2. Update Education Record
-  const { error: eduErr } = await supabase
+  const { data: eduData, error: eduErr } = await supabase
     .from('education_records')
     .update({
       highest_education: education.highest_education,
       completion: education.completion,
-      highest_level: education.highest_level || null,
-      graduation_date: education.graduation_date || null,
-      honors_received: education.honors_received || null,
+      highest_level: (education.highest_level && education.highest_level.trim() !== '') ? education.highest_level : null,
+      graduation_date: (education.graduation_date && education.graduation_date.trim() !== '') ? education.graduation_date : null,
+      honors_received: (education.honors_received && education.honors_received.trim() !== '') ? education.honors_received : null,
       program_title: education.program_title,
       major: education.major,
       inclusive_years: education.inclusive_years,
       school_code: education.school_code
     })
-    .eq('educational_record_id', educational_record_id);
+    .eq('educational_record_id', educational_record_id)
+    .select();
   if (eduErr) throw new Error('Failed to update education details: ' + eduErr.message);
+  if (!eduData || eduData.length === 0) {
+    throw new Error('Failed to update education details: No rows updated. This may be due to Row Level Security (RLS) restrictions or an invalid record ID.');
+  }
 
   // 3. Handle Employment Record updates
   let finalEmpRecordId = employment_record_id;
@@ -244,7 +253,7 @@ export async function adminUpdateApplication(password: string, payload: {
   if (personal.employment_status === 'Employed' && employment) {
     if (employment_record_id) {
       // Update existing
-      const { error: empErr } = await supabase
+      const { data: empData, error: empErr } = await supabase
         .from('employment_records')
         .update({
           job_title: employment.job_title,
@@ -252,8 +261,12 @@ export async function adminUpdateApplication(password: string, payload: {
           appointment_status: employment.appointment_status,
           agency_code: employment.agency_code
         })
-        .eq('employment_record_id', employment_record_id);
+        .eq('employment_record_id', employment_record_id)
+        .select();
       if (empErr) throw new Error('Failed to update employment details: ' + empErr.message);
+      if (!empData || empData.length === 0) {
+        throw new Error('Failed to update employment details: No rows updated. This may be due to Row Level Security (RLS) restrictions or an invalid record ID.');
+      }
     } else {
       // Create new employment record
       const newEmpId = `EMP-${generateNumericId(5)}`;
@@ -278,7 +291,7 @@ export async function adminUpdateApplication(password: string, payload: {
   }
 
   // 4. Update Applicant details
-  const { error: applicantErr } = await supabase
+  const { data: applicantData, error: applicantErr } = await supabase
     .from('applicants')
     .update({
       name: personal.name,
@@ -297,8 +310,13 @@ export async function adminUpdateApplication(password: string, payload: {
       employment_status: personal.employment_status,
       employment_record_id: finalEmpRecordId
     })
-    .eq('applicant_id', applicant_id);
+    .eq('applicant_id', applicant_id)
+    .select();
   if (applicantErr) throw new Error('Failed to update applicant details: ' + applicantErr.message);
+  if (!applicantData || applicantData.length === 0) {
+    throw new Error('Failed to update applicant details: No rows updated. This may be due to Row Level Security (RLS) restrictions or an invalid applicant ID.');
+  }
+
 
   // Clean up orphan employment record if status changed from Employed to Unemployed
   if (personal.employment_status !== 'Employed' && employment_record_id) {
@@ -503,9 +521,9 @@ export async function adminAddApplication(password: string, payload: {
       educational_record_id: eduRecordId,
       highest_education: education.highest_education,
       completion: education.completion,
-      highest_level: education.highest_level || null,
-      graduation_date: education.graduation_date || null,
-      honors_received: education.honors_received || null,
+      highest_level: (education.highest_level && education.highest_level.trim() !== '') ? education.highest_level : null,
+      graduation_date: (education.graduation_date && education.graduation_date.trim() !== '') ? education.graduation_date : null,
+      honors_received: (education.honors_received && education.honors_received.trim() !== '') ? education.honors_received : null,
       program_title: education.program_title,
       major: education.major,
       inclusive_years: education.inclusive_years,

@@ -203,3 +203,59 @@ CREATE INDEX IF NOT EXISTS idx_applicants_email ON applicants(email);
 CREATE INDEX IF NOT EXISTS idx_applicants_name ON applicants(name);
 CREATE INDEX IF NOT EXISTS idx_applications_applicant_id ON applications(applicant_id);
 ```
+
+---
+
+## 4. Row Level Security (RLS) & Access Policies
+
+To implement full security where public anonymous users can register and search but not perform administrative updates/deletions:
+
+```sql
+-- 1. Enable RLS on all tables
+ALTER TABLE public.schools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.education_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.employment_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.applicants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.disabilities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.eligibility_proofs ENABLE ROW LEVEL SECURITY;
+
+-- 2. Drop existing policies if any
+DROP POLICY IF EXISTS "Allow public select" ON public.schools;
+DROP POLICY IF EXISTS "Allow public select" ON public.agencies;
+DROP POLICY IF EXISTS "Allow public select" ON public.applicants;
+DROP POLICY IF EXISTS "Allow public select" ON public.applications;
+DROP POLICY IF EXISTS "Allow public select" ON public.education_records;
+DROP POLICY IF EXISTS "Allow public select" ON public.employment_records;
+DROP POLICY IF EXISTS "Allow public select" ON public.disabilities;
+DROP POLICY IF EXISTS "Allow public select" ON public.eligibility_proofs;
+
+DROP POLICY IF EXISTS "Allow public insert" ON public.applicants;
+DROP POLICY IF EXISTS "Allow public insert" ON public.applications;
+DROP POLICY IF EXISTS "Allow public insert" ON public.education_records;
+DROP POLICY IF EXISTS "Allow public insert" ON public.employment_records;
+DROP POLICY IF EXISTS "Allow public insert" ON public.disabilities;
+DROP POLICY IF EXISTS "Allow public insert" ON public.eligibility_proofs;
+
+-- 3. Create SELECT policies (Allow public reads for tracking/inputs)
+CREATE POLICY "Allow public select" ON public.schools FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.agencies FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.applicants FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.applications FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.education_records FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.employment_records FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.disabilities FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow public select" ON public.eligibility_proofs FOR SELECT TO anon USING (true);
+
+-- 4. Create INSERT policies (Allow public registration submissions)
+CREATE POLICY "Allow public insert" ON public.applicants FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public insert" ON public.applications FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public insert" ON public.education_records FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public insert" ON public.employment_records FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public insert" ON public.disabilities FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "Allow public insert" ON public.eligibility_proofs FOR INSERT TO anon WITH CHECK (true);
+
+-- Note: No UPDATE or DELETE policies are defined for the 'anon' or 'authenticated' roles.
+-- As a result, only database superusers and connections using the 'service_role' key (e.g. from server actions) can perform updates/deletions.
+```

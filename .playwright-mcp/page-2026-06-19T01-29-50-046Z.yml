@@ -1,0 +1,53 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "CSC PORTAL" [ref=e5] [cursor=pointer]:
+          - /url: /
+        - navigation [ref=e6]:
+          - link "Apply" [ref=e7] [cursor=pointer]:
+            - /url: /apply
+          - link "Track Status" [ref=e8] [cursor=pointer]:
+            - /url: /track
+          - link "Admin Panel" [ref=e9] [cursor=pointer]:
+            - /url: /admin
+    - main [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - heading "Database Control Panel" [level=1] [ref=e14]:
+            - img [ref=e15]
+            - text: Database Control Panel
+          - paragraph [ref=e19]: Inspect, schedule, validate, or delete exam applicant registrations under strict Row Level Security.
+        - button "Log Out" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - text: Log Out
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - textbox "Search name, email, or application number..." [ref=e31]
+          - generic [ref=e32]:
+            - img [ref=e33]
+            - combobox [ref=e35]:
+              - option "All Status" [selected]
+              - option "Pending"
+              - option "Approved"
+              - option "Rejected"
+          - button "Add Applicant" [ref=e36] [cursor=pointer]:
+            - img [ref=e37]
+            - text: Add Applicant
+        - table [ref=e40]:
+          - rowgroup [ref=e41]:
+            - row "Ref No. Name Email Exam Date Status Actions" [ref=e42]:
+              - columnheader "Ref No." [ref=e43]
+              - columnheader "Name" [ref=e44]
+              - columnheader "Email" [ref=e45]
+              - columnheader "Exam Date" [ref=e46]
+              - columnheader "Status" [ref=e47]
+              - columnheader "Actions" [ref=e48]
+          - rowgroup [ref=e49]:
+            - row "No applicant records match current search filters." [ref=e50]:
+              - cell "No applicant records match current search filters." [ref=e51]
+  - button "Open Next.js Dev Tools" [ref=e57] [cursor=pointer]:
+    - img [ref=e58]
+  - alert [ref=e61]

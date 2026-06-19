@@ -1,0 +1,219 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "CSC PORTAL" [ref=e5] [cursor=pointer]:
+          - /url: /
+        - navigation [ref=e6]:
+          - link "Apply" [ref=e7] [cursor=pointer]:
+            - /url: /apply
+          - link "Track Status" [ref=e8] [cursor=pointer]:
+            - /url: /track
+          - link "Admin Panel" [ref=e9] [cursor=pointer]:
+            - /url: /admin
+    - main [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - heading "Database Control Panel" [level=1] [ref=e14]:
+            - img [ref=e15]
+            - text: Database Control Panel
+          - paragraph [ref=e19]: Inspect, schedule, validate, or delete exam applicant registrations under strict Row Level Security.
+        - button "Log Out" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - text: Log Out
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - textbox "Search name, email, or application number..." [ref=e31]
+          - generic [ref=e32]:
+            - img [ref=e33]
+            - combobox [ref=e35]:
+              - option "All Status" [selected]
+              - option "Pending"
+              - option "Approved"
+              - option "Rejected"
+          - button "Add Applicant" [active] [ref=e36] [cursor=pointer]:
+            - img [ref=e37]
+            - text: Add Applicant
+        - table [ref=e62]:
+          - rowgroup [ref=e63]:
+            - row "Ref No. Name Email Exam Date Status Actions" [ref=e64]:
+              - columnheader "Ref No." [ref=e65]
+              - columnheader "Name" [ref=e66]
+              - columnheader "Email" [ref=e67]
+              - columnheader "Exam Date" [ref=e68]
+              - columnheader "Status" [ref=e69]
+              - columnheader "Actions" [ref=e70]
+          - rowgroup [ref=e71]:
+            - row "No applicant records match current search filters." [ref=e72]:
+              - cell "No applicant records match current search filters." [ref=e73]
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - heading "Manual Application Creation" [level=2] [ref=e77]
+          - button [ref=e78] [cursor=pointer]:
+            - img [ref=e79]
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+            - heading "A. Examination Details" [level=3] [ref=e84]
+            - generic [ref=e85]:
+              - generic [ref=e86]:
+                - generic [ref=e87]: Exam Applied For
+                - combobox [ref=e88]:
+                  - option "Career Service-Professional" [selected]
+                  - option "Career Service-SubProfessional"
+              - generic [ref=e89]:
+                - generic [ref=e90]: Regional Office
+                - textbox [ref=e91]: NCR
+              - generic [ref=e92]:
+                - generic [ref=e93]: Application Status
+                - combobox [ref=e94]:
+                  - option "Pending" [selected]
+                  - option "Approved"
+                  - option "Rejected"
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - generic [ref=e97]: Exam Date
+                - textbox "YYYY-MM-DD" [ref=e98]: 2026-10-15
+              - generic [ref=e99]:
+                - generic [ref=e100]: Exam Venue
+                - textbox [ref=e101]: NCR School Center
+            - heading "B. Personal Information" [level=3] [ref=e102]
+            - generic [ref=e103]:
+              - generic [ref=e104]:
+                - generic [ref=e105]: Full Name
+                - textbox [ref=e106]
+              - generic [ref=e107]:
+                - generic [ref=e108]: Birthdate
+                - textbox [ref=e109]
+              - generic [ref=e110]:
+                - generic [ref=e111]: Sex
+                - combobox [ref=e112]:
+                  - option "Male" [selected]
+                  - option "Female"
+            - generic [ref=e113]:
+              - generic [ref=e114]:
+                - generic [ref=e115]: Email
+                - textbox [ref=e116]
+              - generic [ref=e117]:
+                - generic [ref=e118]: Mobile Number
+                - textbox [ref=e119]
+              - generic [ref=e120]:
+                - generic [ref=e121]: Telephone (Optional)
+                - textbox [ref=e122]
+            - generic [ref=e123]:
+              - generic [ref=e124]:
+                - generic [ref=e125]: Birthplace
+                - textbox [ref=e126]
+              - generic [ref=e127]:
+                - generic [ref=e128]: Citizenship
+                - textbox [ref=e129]: Filipino
+              - generic [ref=e130]:
+                - generic [ref=e131]: Civil Status
+                - combobox [ref=e132]:
+                  - option "Single" [selected]
+                  - option "Married"
+                  - option "Widowed"
+                  - option "Separated"
+            - generic [ref=e133]:
+              - generic [ref=e134]:
+                - generic [ref=e135]: Permanent Address
+                - textbox [ref=e136]
+              - generic [ref=e137]:
+                - generic [ref=e138]: Zip Code
+                - textbox [ref=e139]
+              - generic [ref=e140]:
+                - generic [ref=e141]: Mother's Maiden Name
+                - textbox [ref=e142]
+            - generic [ref=e143]:
+              - generic [ref=e144]:
+                - generic [ref=e145]: Priority Group
+                - combobox [ref=e146]:
+                  - option "None" [selected]
+                  - option "PWD"
+                  - option "Senior Citizen"
+                  - option "Indigenous"
+                  - option "Solo Parent"
+              - generic [ref=e147]:
+                - generic [ref=e148]: Employment Status
+                - combobox [ref=e149]:
+                  - option "Unemployed" [selected]
+                  - option "Employed"
+                  - option "Student"
+                  - option "Retired"
+            - heading "C. Educational History" [level=3] [ref=e150]
+            - generic [ref=e151]:
+              - generic [ref=e152]:
+                - generic [ref=e153]: Highest Education Level
+                - combobox [ref=e154]:
+                  - option "High School"
+                  - option "Senior High School"
+                  - option "Bachelor's" [selected]
+                  - option "Master's"
+                  - option "Doctorate"
+              - generic [ref=e155]:
+                - generic [ref=e156]: Completion Status
+                - combobox [ref=e157]:
+                  - option "Graduate" [selected]
+                  - option "Undergraduate"
+                  - option "Ongoing"
+              - generic [ref=e158]:
+                - generic [ref=e159]: Inclusive Years (e.g. 2018-2022)
+                - textbox [ref=e160]
+            - generic [ref=e161]:
+              - generic [ref=e162]:
+                - generic [ref=e163]: Program/Course Title
+                - textbox [ref=e164]
+              - generic [ref=e165]:
+                - generic [ref=e166]: Major/Specialization
+                - textbox [ref=e167]
+              - generic [ref=e168]:
+                - generic [ref=e169]: School Affiliation
+                - combobox [ref=e170]:
+                  - option "University of the Philippines" [selected]
+                  - option "Ateneo de Manila University"
+                  - option "De La Salle University"
+                  - option "University of Santo Tomas"
+            - generic [ref=e171]:
+              - generic [ref=e172]:
+                - generic [ref=e173]: Graduation Date (Optional)
+                - textbox [ref=e174]
+              - generic [ref=e175]:
+                - generic [ref=e176]: Highest Units (Optional)
+                - textbox [ref=e177]
+              - generic [ref=e178]:
+                - generic [ref=e179]: Honors Received (Optional)
+                - textbox [ref=e180]
+            - heading "E. Disabilities & Eligibility" [level=3] [ref=e181]
+            - generic [ref=e182]:
+              - generic [ref=e183] [cursor=pointer]:
+                - checkbox "Visual Impairment" [ref=e184]
+                - text: Visual Impairment
+              - generic [ref=e185] [cursor=pointer]:
+                - checkbox "Hearing Impairment" [ref=e186]
+                - text: Hearing Impairment
+              - generic [ref=e187] [cursor=pointer]:
+                - checkbox "Orthopedic" [ref=e188]
+                - text: Orthopedic
+            - generic [ref=e189]:
+              - generic [ref=e190]: Add Government/Civil Eligibility Proofs
+              - generic [ref=e191]:
+                - generic [ref=e192]:
+                  - generic [ref=e193]: Exam/Title
+                  - textbox "e.g. Let Board Exam" [ref=e194]
+                - generic [ref=e195]:
+                  - generic [ref=e196]: Rating
+                  - textbox "e.g. 85.50" [ref=e197]
+                - generic [ref=e198]:
+                  - generic [ref=e199]: Date
+                  - textbox "YYYY-MM-DD" [ref=e200]
+                - generic [ref=e201]:
+                  - generic [ref=e202]: Place
+                  - textbox "City" [ref=e203]
+                - button "Add" [ref=e204] [cursor=pointer]
+          - generic [ref=e205]:
+            - button "Cancel" [ref=e206] [cursor=pointer]
+            - button "Save Application" [ref=e207] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e57] [cursor=pointer]:
+    - img [ref=e58]
+  - alert [ref=e61]

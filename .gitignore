@@ -43,3 +43,9 @@ next-env.d.ts
 # Agent operational logs
 memorycontext.md
 Progress.md
+
+# Project documentation & plans
+PID.md
+Architecture.md
+Build.md
+Design.md

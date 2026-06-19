@@ -27,6 +27,13 @@ export function useAdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Toast indicator state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    setToast({ message, type });
+  };
+
   // Lookup data for dropdowns
   const [schools, setSchools] = useState<School[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -290,9 +297,9 @@ export function useAdminDashboard() {
         csr_regional_office: editRegionalOffice
       } : null);
 
-      alert('Application status & scheduling updated successfully!');
+      showToast('Application status & scheduling updated successfully!', 'success');
     } catch (err: any) {
-      alert('Failed to update record: ' + err.message);
+      showToast('Failed to update record: ' + err.message, 'error');
     } finally {
       setSavingEdit(false);
     }
@@ -313,7 +320,7 @@ export function useAdminDashboard() {
         app.applicants?.employment_record_id || null
       );
 
-      alert('Applicant record and all associated logs deleted successfully.');
+      showToast('Applicant record and all associated logs deleted successfully.', 'success');
       
       if (selectedApp?.application_no === app.application_no) {
         setSelectedApp(null);
@@ -322,7 +329,7 @@ export function useAdminDashboard() {
       await fetchApplications();
     } catch (err: any) {
       console.error(err);
-      alert('Error during delete transaction: ' + err.message);
+      showToast('Error during delete transaction: ' + err.message, 'error');
     }
   };
 
@@ -432,7 +439,7 @@ export function useAdminDashboard() {
   // Proofs editors
   const addProof = () => {
     if (!newProof.title || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
-      alert('Please fill in all eligibility proof fields.');
+      showToast('Please fill in all eligibility proof fields.', 'error');
       return;
     }
     setProofs(prev => [...prev, newProof]);
@@ -464,12 +471,13 @@ export function useAdminDashboard() {
         eligibilityProofs: proofs
       });
 
-      alert('Profile and registration records updated successfully!');
+      showToast('Profile and registration records updated successfully!', 'success');
       setShowEditModal(false);
       setSelectedApp(null);
       await fetchApplications();
     } catch (err: any) {
       setActionError(err.message || 'Failed to modify record.');
+      showToast(err.message || 'Failed to modify record.', 'error');
     } finally {
       setSavingModal(false);
     }
@@ -491,11 +499,12 @@ export function useAdminDashboard() {
         eligibilityProofs: proofs
       });
 
-      alert(`Application added successfully!\nApplicant ID: ${res.applicantId}\nApplication No: ${res.applicationNo}`);
+      showToast(`Application added successfully!\nApplicant ID: ${res.applicantId}\nApplication No: ${res.applicationNo}`, 'success');
       setShowCreateModal(false);
       await fetchApplications();
     } catch (err: any) {
       setActionError(err.message || 'Failed to create manual entry.');
+      showToast(err.message || 'Failed to create manual entry.', 'error');
     } finally {
       setSavingModal(false);
     }
@@ -568,6 +577,9 @@ export function useAdminDashboard() {
     filteredApps,
     handleOpenCreateModal,
     handleOpenEditModal,
-    fetchApplications
+    fetchApplications,
+    toast,
+    setToast,
+    showToast
   };
 }

@@ -26,6 +26,13 @@ export function useApplyForm() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
+  // Toast indicator state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    setToast({ message, type });
+  };
+  
   // Application details output after success
   const [successDetails, setSuccessDetails] = useState<{
     applicantId: string;
@@ -164,7 +171,7 @@ export function useApplyForm() {
 
   const addEligibilityProof = () => {
     if (!newProof.title || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
-      alert('Please fill out all fields for eligibility proof.');
+      showToast('Please fill out all fields for eligibility proof.', 'error');
       return;
     }
     setEligibilityProofs(prev => [...prev, newProof]);
@@ -417,6 +424,9 @@ export function useApplyForm() {
     validateStep,
     handleSubmit,
     nextStep,
-    prevStep
+    prevStep,
+    toast,
+    setToast,
+    showToast
   };
 }

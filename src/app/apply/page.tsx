@@ -13,6 +13,7 @@ import EmploymentForm from './components/EmploymentForm';
 import DisabilitiesForm from './components/DisabilitiesForm';
 import ReviewStep from './components/ReviewStep';
 import SuccessDisplay from './components/SuccessDisplay';
+import Toast from '../components/Toast';
 
 export default function Apply() {
   const {
@@ -39,7 +40,9 @@ export default function Apply() {
     validateStep,
     handleSubmit,
     nextStep,
-    prevStep
+    prevStep,
+    toast,
+    setToast
   } = useApplyForm();
 
   if (successDetails) {
@@ -197,6 +200,14 @@ export default function Apply() {
           </form>
         )}
       </div>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </main>
   );
 }

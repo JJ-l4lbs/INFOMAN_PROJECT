@@ -9,6 +9,7 @@ import ApplicationsTable from './components/ApplicationsTable';
 import DetailSidebar from './components/DetailSidebar';
 import CreateModal from './components/CreateModal';
 import EditModal from './components/EditModal';
+import Toast from '../components/Toast';
 
 export default function Admin() {
   const {
@@ -63,7 +64,9 @@ export default function Admin() {
     filteredApps,
     handleOpenCreateModal,
     handleOpenEditModal,
-    fetchApplications
+    fetchApplications,
+    toast,
+    setToast
   } = useAdminDashboard();
 
   if (!isAuthenticated) {
@@ -174,6 +177,14 @@ export default function Admin() {
           savingModal={savingModal}
           schools={schools}
           agencies={agencies}
+        />
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
 

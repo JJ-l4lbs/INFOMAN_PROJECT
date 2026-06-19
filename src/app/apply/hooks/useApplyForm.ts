@@ -1,0 +1,422 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { School, Agency } from '@/types';
+
+const FALLBACK_SCHOOLS: School[] = [
+  { school_code: '100001', school_name: 'University of the Philippines', school_address: 'Diliman, Quezon City' },
+  { school_code: '100002', school_name: 'Ateneo de Manila University', school_address: 'Loyola Heights, Quezon City' },
+  { school_code: '100003', school_name: 'De La Salle University', school_address: 'Taft Ave, Manila' },
+  { school_code: '100004', school_name: 'University of Santo Tomas', school_address: 'España, Manila' }
+];
+
+const FALLBACK_AGENCIES: Agency[] = [
+  { agency_code: '200001', agency_name: 'DepEd (Department of Education)', agency_address: 'Pasig City' },
+  { agency_code: '200002', agency_name: 'DOH (Department of Health)', agency_address: 'Manila' },
+  { agency_code: '200003', agency_name: 'DPWH (Public Works & Highways)', agency_address: 'Manila' },
+  { agency_code: '200004', agency_name: 'BIR (Bureau of Internal Revenue)', agency_address: 'Quezon City' }
+];
+
+export function useApplyForm() {
+  const [step, setStep] = useState(1);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [loadingLookups, setLoadingLookups] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  
+  // Application details output after success
+  const [successDetails, setSuccessDetails] = useState<{
+    applicantId: string;
+    applicationNo: string;
+  } | null>(null);
+
+  // --- FORM STATE ---
+  const [personal, setPersonal] = useState({
+    name: '',
+    birthdate: '',
+    sex: 'Male',
+    birthplace: '',
+    citizenship: 'Filipino',
+    mother_maiden_name: '',
+    permanent_address: '',
+    zip_code: '',
+    mobile_number: '',
+    telephone_number: '',
+    email: '',
+    civil_status: 'Single',
+    priority_group: 'None',
+    employment_status: 'Unemployed'
+  });
+
+  const [education, setEducation] = useState({
+    highest_education: "Bachelor's",
+    completion: 'Completed',
+    highest_level: 'College',
+    graduation_date: '',
+    honors_received: '',
+    program_title: '',
+    major: '',
+    inclusive_years: '',
+    school_code: ''
+  });
+
+  const [employment, setEmployment] = useState({
+    job_title: '',
+    years_in_agency: 0,
+    appointment_status: 'Permanent',
+    agency_code: ''
+  });
+
+  const [disabilities, setDisabilities] = useState({
+    visual: false,
+    hearing: false,
+    orthopedic: false
+  });
+
+  const [eligibilityProofs, setEligibilityProofs] = useState<Array<{
+    title: string;
+    rating: string;
+    dateGranted: string;
+    placeTaken: string;
+  }>>([]);
+
+  const [newProof, setNewProof] = useState({
+    title: '',
+    rating: '',
+    dateGranted: '',
+    placeTaken: ''
+  });
+
+  // --- FETCH SCHOOLS & AGENCIES ON MOUNT ---
+  useEffect(() => {
+    async function fetchLookups() {
+      try {
+        setLoadingLookups(true);
+        const { data: schoolsData, error: schoolsErr } = await supabase
+          .from('schools')
+          .select('*');
+        const { data: agenciesData, error: agenciesErr } = await supabase
+          .from('agencies')
+          .select('*');
+
+        if (!schoolsErr && schoolsData && schoolsData.length > 0) {
+          setSchools(schoolsData as School[]);
+          setEducation(prev => ({ ...prev, school_code: schoolsData[0].school_code }));
+        } else {
+          setSchools(FALLBACK_SCHOOLS);
+          setEducation(prev => ({ ...prev, school_code: FALLBACK_SCHOOLS[0].school_code }));
+        }
+
+        if (!agenciesErr && agenciesData && agenciesData.length > 0) {
+          setAgencies(agenciesData as Agency[]);
+          setEmployment(prev => ({ ...prev, agency_code: agenciesData[0].agency_code }));
+        } else {
+          setAgencies(FALLBACK_AGENCIES);
+          setEmployment(prev => ({ ...prev, agency_code: FALLBACK_AGENCIES[0].agency_code }));
+        }
+      } catch (err) {
+        console.error('Failed to query lookup tables, applying fallback data', err);
+        setSchools(FALLBACK_SCHOOLS);
+        setAgencies(FALLBACK_AGENCIES);
+      } finally {
+        setLoadingLookups(false);
+      }
+    }
+    fetchLookups();
+  }, []);
+
+  // --- HELPER ID GENERATORS ---
+  const generateNumericId = (length: number) => {
+    let result = '';
+    const digits = '0123456789';
+    for (let i = 0; i < length; i++) {
+      result += digits.charAt(Math.floor(Math.random() * 10));
+    }
+    return result;
+  };
+
+  const generateAlphaNumericId = (length: number) => {
+    let result = '';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  // --- DYNAMIC FORM HANDLERS ---
+  const handlePersonalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPersonal(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEducationChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEducation(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEmploymentChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEmployment(prev => ({ ...prev, [name]: name === 'years_in_agency' ? parseInt(value) || 0 : value }));
+  };
+
+  const addEligibilityProof = () => {
+    if (!newProof.title || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
+      alert('Please fill out all fields for eligibility proof.');
+      return;
+    }
+    setEligibilityProofs(prev => [...prev, newProof]);
+    setNewProof({ title: '', rating: '', dateGranted: '', placeTaken: '' });
+  };
+
+  const removeEligibilityProof = (index: number) => {
+    setEligibilityProofs(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // --- STEP VALIDATION ---
+  const validateStep = () => {
+    if (step === 1) {
+      return (
+        personal.name &&
+        personal.birthdate &&
+        personal.birthplace &&
+        personal.citizenship &&
+        personal.mother_maiden_name &&
+        personal.permanent_address &&
+        personal.zip_code &&
+        personal.mobile_number &&
+        personal.email
+      );
+    }
+    if (step === 2) {
+      return (
+        education.program_title &&
+        education.major &&
+        education.inclusive_years &&
+        education.school_code
+      );
+    }
+    if (step === 3 && personal.employment_status === 'Employed') {
+      return (
+        employment.job_title &&
+        employment.years_in_agency >= 0 &&
+        employment.agency_code
+      );
+    }
+    return true;
+  };
+
+  // --- SUBMIT TRANSACTION TO SUPABASE ---
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setSubmitting(true);
+
+    const formsDate = new Date().toISOString().split('T')[0];
+    const targetExamDate = '2026-10-15'; // Default exam batch date
+    const targetExamPlace = 'NCR School Center';
+    const targetRegionalOffice = 'NCR';
+
+    try {
+      // 1. BUSINESS RULE CHECK: Applicant may apply more than once so long as it is not on the same date and not during an exam.
+      const { data: existingApplicants, error: applicantQueryErr } = await supabase
+        .from('applicants')
+        .select('applicant_id')
+        .eq('email', personal.email);
+
+      if (applicantQueryErr) throw new Error('Database check failed: ' + applicantQueryErr.message);
+
+      if (existingApplicants && existingApplicants.length > 0) {
+        const applicantIds = existingApplicants.map(app => app.applicant_id);
+
+        // Fetch their applications
+        const { data: existingApplications, error: appQueryErr } = await supabase
+          .from('applications')
+          .select('forms_date, exam_date')
+          .in('applicant_id', applicantIds);
+
+        if (appQueryErr) throw new Error('Database applications query failed: ' + appQueryErr.message);
+
+        if (existingApplications && existingApplications.length > 0) {
+          // Check for duplicate forms_date (same day)
+          const hasSameDayApply = existingApplications.some(app => app.forms_date === formsDate);
+          if (hasSameDayApply) {
+            throw new Error(`An application has already been filed today (${formsDate}) under this email. Please try again on a different date.`);
+          }
+
+          // Check if there's a scheduled exam in the future (during an active exam cycle)
+          const todayMs = new Date().getTime();
+          const hasActiveExamRegistration = existingApplications.some(app => {
+            const examTime = new Date(app.exam_date).getTime();
+            return examTime > todayMs; // Registered for a future exam that hasn't happened yet
+          });
+
+          if (hasActiveExamRegistration) {
+            throw new Error('You are already registered for an upcoming exam. You cannot apply again until the current exam cycle is completed.');
+          }
+        }
+      }
+
+      // 2. GENERATE AND INSERT TRANSACTION ENTITIES
+      const eduRecordId = generateNumericId(12);
+      const empRecordId = personal.employment_status === 'Employed' ? `EMP-${generateNumericId(5)}` : null;
+      const applicantId = `APP-${generateAlphaNumericId(8)}`;
+      const applicationNo = `APPNO-${generateNumericId(5)}`;
+
+      // Step A: Insert Education Record
+      const { error: eduErr } = await supabase
+        .from('education_records')
+        .insert({
+          educational_record_id: eduRecordId,
+          highest_education: education.highest_education,
+          completion: education.completion,
+          highest_level: education.highest_level,
+          graduation_date: education.graduation_date || null,
+          honors_received: education.honors_received || null,
+          program_title: education.program_title,
+          major: education.major,
+          inclusive_years: education.inclusive_years,
+          school_code: education.school_code
+        });
+      if (eduErr) throw new Error('Failed to create Education Record: ' + eduErr.message);
+
+      // Step B: Insert Employment Record (if applicable)
+      if (personal.employment_status === 'Employed' && empRecordId) {
+        const { error: empErr } = await supabase
+          .from('employment_records')
+          .insert({
+            employment_record_id: empRecordId,
+            job_title: employment.job_title,
+            years_in_agency: employment.years_in_agency,
+            appointment_status: employment.appointment_status,
+            agency_code: employment.agency_code
+          });
+        if (empErr) throw new Error('Failed to create Employment Record: ' + empErr.message);
+      }
+
+      // Step C: Insert Applicant
+      const { error: applicantErr } = await supabase
+        .from('applicants')
+        .insert({
+          applicant_id: applicantId,
+          name: personal.name,
+          birthdate: personal.birthdate,
+          sex: personal.sex,
+          birthplace: personal.birthplace,
+          citizenship: personal.citizenship,
+          mother_maiden_name: personal.mother_maiden_name,
+          permanent_address: personal.permanent_address,
+          zip_code: personal.zip_code,
+          mobile_number: personal.mobile_number,
+          telephone_number: personal.telephone_number || null,
+          email: personal.email,
+          civil_status: personal.civil_status,
+          priority_group: personal.priority_group !== 'None' ? personal.priority_group : null,
+          employment_status: personal.employment_status,
+          educational_record_id: eduRecordId,
+          employment_record_id: empRecordId
+        });
+      if (applicantErr) throw new Error('Failed to save Applicant profile: ' + applicantErr.message);
+
+      // Step D: Insert Application
+      const { error: appErr } = await supabase
+        .from('applications')
+        .insert({
+          application_no: applicationNo,
+          forms_date: formsDate,
+          exam_applied_for: 'Career Service-Professional',
+          last_exam_date: null,
+          csr_regional_office: targetRegionalOffice,
+          exam_date: targetExamDate,
+          exam_place: targetExamPlace,
+          applicant_id: applicantId,
+          status: 'Pending'
+        });
+      if (appErr) throw new Error('Failed to submit Application details: ' + appErr.message);
+
+      // Step E: Insert Disabilities
+      const disabilityRecords = [];
+      if (disabilities.visual) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Visual Impairment', applicant_id: applicantId });
+      if (disabilities.hearing) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Hearing Impairment', applicant_id: applicantId });
+      if (disabilities.orthopedic) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Orthopedic', applicant_id: applicantId });
+
+      if (disabilityRecords.length > 0) {
+        const { error: disErr } = await supabase
+          .from('disabilities')
+          .insert(disabilityRecords);
+        if (disErr) throw new Error('Failed to record disabilities: ' + disErr.message);
+      }
+
+      // Step F: Insert Eligibility Proofs
+      if (eligibilityProofs.length > 0) {
+        const proofRecords = eligibilityProofs.map(proof => ({
+          eligibility_proof_id: `ELIG-${generateNumericId(5)}`,
+          eligibility_proof_title: proof.title,
+          rating_obtained: proof.rating,
+          date_granted: proof.dateGranted,
+          eligibility_place_taken: proof.placeTaken,
+          applicant_id: applicantId
+        }));
+
+        const { error: eligErr } = await supabase
+          .from('eligibility_proofs')
+          .insert(proofRecords);
+        if (eligErr) throw new Error('Failed to save Eligibility Proofs: ' + eligErr.message);
+      }
+
+      // Success!
+      setSuccessDetails({ applicantId, applicationNo });
+      setStep(6);
+    } catch (err: any) {
+      console.error(err);
+      setSubmitError(err.message || 'An unexpected error occurred during submission.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const nextStep = () => {
+    if (step === 2 && personal.employment_status === 'Unemployed') {
+      setStep(4);
+    } else {
+      setStep(prev => prev + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (step === 4 && personal.employment_status === 'Unemployed') {
+      setStep(2);
+    } else {
+      setStep(prev => prev - 1);
+    }
+  };
+
+  return {
+    step,
+    schools,
+    agencies,
+    loadingLookups,
+    submitting,
+    submitError,
+    successDetails,
+    personal,
+    education,
+    employment,
+    disabilities,
+    setDisabilities,
+    eligibilityProofs,
+    newProof,
+    setNewProof,
+    handlePersonalChange,
+    handleEducationChange,
+    handleEmploymentChange,
+    addEligibilityProof,
+    removeEligibilityProof,
+    validateStep,
+    handleSubmit,
+    nextStep,
+    prevStep
+  };
+}

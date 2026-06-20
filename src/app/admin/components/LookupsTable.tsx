@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { PlusCircle, Loader2, CheckCircle2, Trash2, Edit2 } from 'lucide-react';
+import { PlusCircle, Loader2, CheckCircle2, Trash2, Edit2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface LookupItem {
   school_code?: string;
@@ -40,6 +40,8 @@ export default function LookupsTable({
   onAdd
 }: LookupsTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<'code' | 'name' | 'address' | 'status'>('code');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const getCode = (item: LookupItem) => {
     return item.school_code || item.agency_code || item.disability_code || item.eligibility_code || '';
@@ -53,18 +55,29 @@ export default function LookupsTable({
     return item.school_address || item.agency_address || '';
   };
 
-  const getTitleLabel = () => {
-    if (type === 'schools') return 'Accredited Schools';
-    if (type === 'agencies') return 'Government Agencies';
-    if (type === 'disabilities') return 'Recognized Disabilities';
-    return 'Exam Eligibility Types';
-  };
-
   const getCodeHeader = () => {
     if (type === 'schools') return 'School Code';
     if (type === 'agencies') return 'Agency Code';
     if (type === 'disabilities') return 'Disability Code';
     return 'Eligibility Code';
+  };
+
+  const handleSort = (field: 'code' | 'name' | 'address' | 'status') => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const renderSortIcon = (field: 'code' | 'name' | 'address' | 'status') => {
+    if (sortField !== field) {
+      return <ArrowUpDown size={12} style={{ color: 'var(--text-muted)', marginLeft: '0.25rem', opacity: 0.6 }} />;
+    }
+    return sortOrder === 'asc'
+      ? <ArrowUp size={12} style={{ color: 'var(--color-primary)', marginLeft: '0.25rem' }} />
+      : <ArrowDown size={12} style={{ color: 'var(--color-primary)', marginLeft: '0.25rem' }} />;
   };
 
   const filteredData = data.filter(item => {
@@ -73,6 +86,42 @@ export default function LookupsTable({
     const address = getAddress(item).toLowerCase();
     const term = searchTerm.toLowerCase();
     return name.includes(term) || code.includes(term) || address.includes(term);
+  });
+
+  const sortedData = [...filteredData].sort((a, b) => {
+    let aVal = '';
+    let bVal = '';
+
+    if (sortField === 'code') {
+      aVal = getCode(a);
+      bVal = getCode(b);
+    } else if (sortField === 'name') {
+      aVal = getName(a);
+      bVal = getName(b);
+    } else if (sortField === 'address') {
+      aVal = getAddress(a);
+      bVal = getAddress(b);
+    } else if (sortField === 'status') {
+      const aReg = a.is_registered !== false;
+      const bReg = b.is_registered !== false;
+      if (aReg === bReg) return 0;
+      return sortOrder === 'asc'
+        ? (aReg ? 1 : -1)
+        : (aReg ? -1 : 1);
+    }
+
+    aVal = aVal.toLowerCase();
+    bVal = bVal.toLowerCase();
+
+    if (sortField === 'code') {
+      return sortOrder === 'asc'
+        ? aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' })
+        : bVal.localeCompare(aVal, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+    return 0;
   });
 
   return (
@@ -108,22 +157,40 @@ export default function LookupsTable({
           <table className="data-table">
             <thead>
               <tr>
-                <th>{getCodeHeader()}</th>
-                <th>Name / Description</th>
-                {(type === 'schools' || type === 'agencies') && <th>Address</th>}
-                <th>Registration Status</th>
-                <th style={{ textAlign: 'center' }}>Actions</th>
+                <th onClick={() => handleSort('code')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {getCodeHeader()} {renderSortIcon('code')}
+                  </div>
+                </th>
+                <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Name / Description {renderSortIcon('name')}
+                  </div>
+                </th>
+                {(type === 'schools' || type === 'agencies') && (
+                  <th onClick={() => handleSort('address')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      Address {renderSortIcon('address')}
+                    </div>
+                  </th>
+                )}
+                <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Registration Status {renderSortIcon('status')}
+                  </div>
+                </th>
+                <th style={{ textAlign: 'center', width: '10%' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {sortedData.length === 0 ? (
                 <tr>
                   <td colSpan={(type === 'schools' || type === 'agencies') ? 5 : 4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
                     No lookup records found.
                   </td>
                 </tr>
               ) : (
-                filteredData.map(item => {
+                sortedData.map(item => {
                   const code = getCode(item);
                   const isRegistered = item.is_registered !== false;
                   return (
@@ -131,10 +198,10 @@ export default function LookupsTable({
                       <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{code}</td>
                       <td style={{ fontWeight: 500 }}>{getName(item)}</td>
                       {(type === 'schools' || type === 'agencies') && <td>{getAddress(item)}</td>}
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <span 
                           className={`badge badge-${isRegistered ? 'approved' : 'pending'}`} 
-                          style={{ fontSize: '0.7rem' }}
+                          style={{ fontSize: '0.7rem', display: 'inline-block', whiteSpace: 'nowrap' }}
                         >
                           {isRegistered ? 'Registered / Approved' : 'Unregistered (Applicant Input)'}
                         </span>

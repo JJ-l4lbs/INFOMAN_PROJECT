@@ -172,6 +172,22 @@ export function useApplyForm() {
     return result;
   };
 
+  const getInitials = (name: string, fallback: string = 'GEN'): string => {
+    const clean = name.replace(/[^A-Za-z0-9 ]/g, '').trim();
+    if (!clean) return fallback;
+    const uppercaseLetters = clean.replace(/[^A-Z0-9]/g, '');
+    if (uppercaseLetters.length >= 2 && uppercaseLetters.length <= 6) {
+      return uppercaseLetters;
+    }
+    const words = clean.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return words.map(w => w[0]).join('').toUpperCase();
+    } else if (words.length === 1) {
+      return words[0].substring(0, 3).toUpperCase();
+    }
+    return fallback;
+  };
+
   // --- DYNAMIC FORM HANDLERS ---
   const handlePersonalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -298,16 +314,77 @@ export function useApplyForm() {
         }
       }
 
-      // 2. GENERATE AND INSERT TRANSACTION ENTITIES
-      const eduRecordId = generateNumericId(12);
-      const empRecordId = personal.employment_status === 'Employed' ? `EMP-${generateNumericId(5)}` : null;
-      const applicantId = `APP-${generateAlphaNumericId(8)}`;
-      const applicationNo = `APPNO-${generateNumericId(5)}`;
+      // 2. FETCH NEXT SEQUENTIAL KEYS FROM THE DATABASE
+      // A. Educational Record ID (EDU-0001 format)
+      const { data: maxEdu } = await supabase
+        .from('education_records')
+        .select('educational_record_id')
+        .like('educational_record_id', 'EDU-%')
+        .order('educational_record_id', { ascending: false });
+      let eduNum = 1;
+      if (maxEdu && maxEdu.length > 0) {
+        const validEdu = maxEdu.find(e => {
+          const num = parseInt(e.educational_record_id.replace('EDU-', ''));
+          return !isNaN(num) && num < 10000;
+        });
+        if (validEdu) {
+          eduNum = parseInt(validEdu.educational_record_id.replace('EDU-', '')) + 1;
+        }
+      }
+      const eduRecordId = `EDU-${String(eduNum).padStart(4, '0')}`;
+
+      // B. Employment Record ID (EMP-0001 format)
+      let empRecordId = null;
+      if (personal.employment_status === 'Employed') {
+        const { data: maxEmp } = await supabase
+          .from('employment_records')
+          .select('employment_record_id')
+          .like('employment_record_id', 'EMP-%')
+          .order('employment_record_id', { ascending: false });
+        let empNum = 1;
+        if (maxEmp && maxEmp.length > 0) {
+          const validEmp = maxEmp.find(e => {
+            const num = parseInt(e.employment_record_id.replace('EMP-', ''));
+            return !isNaN(num) && num < 10000;
+          });
+          if (validEmp) {
+            empNum = parseInt(validEmp.employment_record_id.replace('EMP-', '')) + 1;
+          }
+        }
+        empRecordId = `EMP-${String(empNum).padStart(4, '0')}`;
+      }
+
+      // C. Applicant ID (First 4 letters of name + random 4 characters, e.g. JOHN-A1B2)
+      const cleanNameForId = personal.name.replace(/[^A-Za-z]/g, '').toUpperCase();
+      const namePrefix = cleanNameForId.padEnd(4, 'X').substring(0, 4);
+      const nameSuffix = generateAlphaNumericId(4);
+      const applicantId = `${namePrefix}-${nameSuffix}`;
+
+      // D. Application No (APPNO-0001 format)
+      const { data: maxApp } = await supabase
+        .from('applications')
+        .select('application_no')
+        .like('application_no', 'APPNO-%')
+        .order('application_no', { ascending: false });
+      let applicationNo = 'APPNO-0001';
+      if (maxApp && maxApp.length > 0) {
+        const validApp = maxApp.find(a => {
+          const num = parseInt(a.application_no.replace('APPNO-', ''));
+          return !isNaN(num) && num < 10000;
+        });
+        if (validApp) {
+          const num = parseInt(validApp.application_no.replace('APPNO-', ''));
+          applicationNo = `APPNO-${String(num + 1).padStart(4, '0')}`;
+        }
+      }
 
       // Step A: Insert Education Record (Handle custom school write-in)
       let targetSchoolCode = education.school_code;
       if (education.school_code === 'OTHER') {
-        targetSchoolCode = `SCH-${generateAlphaNumericId(5)}`;
+        const schoolInitials = getInitials(education.customSchoolName || '', 'SCH');
+        const schoolRand = generateNumericId(5);
+        targetSchoolCode = `${schoolInitials}-${schoolRand}`;
+
         const { error: newSchoolErr } = await supabase
           .from('schools')
           .insert({
@@ -339,7 +416,10 @@ export function useApplyForm() {
       if (personal.employment_status === 'Employed' && empRecordId) {
         let targetAgencyCode = employment.agency_code;
         if (employment.agency_code === 'OTHER') {
-          targetAgencyCode = `AGE-${generateAlphaNumericId(5)}`;
+          const agencyInitials = getInitials(employment.customAgencyName || '', 'AGE');
+          const agencyRand = generateNumericId(5);
+          targetAgencyCode = `${agencyInitials}-${agencyRand}`;
+
           const { error: newAgencyErr } = await supabase
             .from('agencies')
             .insert({
@@ -417,18 +497,48 @@ export function useApplyForm() {
           .eq('disability_name', trimmedCustom);
 
         if (!existingDis || existingDis.length === 0) {
-          const customCode = `DIS-${generateAlphaNumericId(5)}`;
+          const { data: maxDisLookup } = await supabase
+            .from('disability_lookups')
+            .select('disability_code')
+            .like('disability_code', 'DIS-9%')
+            .order('disability_code', { ascending: false })
+            .limit(1);
+          let nextDisCode = 'DIS-90001';
+          if (maxDisLookup && maxDisLookup.length > 0) {
+            const num = parseInt(maxDisLookup[0].disability_code.replace('DIS-', ''));
+            if (!isNaN(num)) {
+              nextDisCode = `DIS-${num + 1}`;
+            }
+          }
           await supabase.from('disability_lookups').insert({
-            disability_code: customCode,
+            disability_code: nextDisCode,
             disability_name: trimmedCustom,
             is_registered: false
           });
         }
       }
 
+      // Query the highest disability_id matching DIS-% to make it sequential
+      const { data: maxDis } = await supabase
+        .from('disabilities')
+        .select('disability_id')
+        .like('disability_id', 'DIS-%')
+        .order('disability_id', { ascending: false });
+
+      let disNum = 1;
+      if (maxDis && maxDis.length > 0) {
+        const validDis = maxDis.find(d => {
+          const num = parseInt(d.disability_id.replace('DIS-', ''));
+          return !isNaN(num) && num < 10000;
+        });
+        if (validDis) {
+          disNum = parseInt(validDis.disability_id.replace('DIS-', '')) + 1;
+        }
+      }
+
       for (const disName of finalSelectedDis) {
         disabilityRecords.push({
-          disability_id: `DIS-${generateNumericId(5)}`,
+          disability_id: `DIS-${String(disNum++).padStart(4, '0')}`,
           disability: disName,
           applicant_id: applicantId
         });
@@ -451,9 +561,21 @@ export function useApplyForm() {
               .eq('eligibility_name', proof.title);
 
             if (!existingElg || existingElg.length === 0) {
-              const customCode = `ELG-${generateAlphaNumericId(5)}`;
+              const { data: maxEligLookup } = await supabase
+                .from('eligibility_lookups')
+                .select('eligibility_code')
+                .like('eligibility_code', 'ELG-9%')
+                .order('eligibility_code', { ascending: false })
+                .limit(1);
+              let nextEligCode = 'ELG-90001';
+              if (maxEligLookup && maxEligLookup.length > 0) {
+                const num = parseInt(maxEligLookup[0].eligibility_code.replace('ELG-', ''));
+                if (!isNaN(num)) {
+                  nextEligCode = `ELG-${num + 1}`;
+                }
+              }
               await supabase.from('eligibility_lookups').insert({
-                eligibility_code: customCode,
+                eligibility_code: nextEligCode,
                 eligibility_name: proof.title,
                 is_registered: false
               });
@@ -461,8 +583,25 @@ export function useApplyForm() {
           }
         }
 
+        const { data: maxElig } = await supabase
+          .from('eligibility_proofs')
+          .select('eligibility_proof_id')
+          .like('eligibility_proof_id', 'EP-%')
+          .order('eligibility_proof_id', { ascending: false });
+
+        let eligNum = 1;
+        if (maxElig && maxElig.length > 0) {
+          const validElig = maxElig.find(e => {
+            const num = parseInt(e.eligibility_proof_id.replace('EP-', ''));
+            return !isNaN(num) && num < 10000;
+          });
+          if (validElig) {
+            eligNum = parseInt(validElig.eligibility_proof_id.replace('EP-', '')) + 1;
+          }
+        }
+
         const proofRecords = eligibilityProofs.map(proof => ({
-          eligibility_proof_id: `ELIG-${generateNumericId(5)}`,
+          eligibility_proof_id: `EP-${String(eligNum++).padStart(4, '0')}`,
           eligibility_proof_title: proof.title,
           rating_obtained: proof.rating,
           date_granted: proof.dateGranted,

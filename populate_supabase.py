@@ -5,6 +5,7 @@ import json
 import urllib.request
 import urllib.error
 import socket
+import re
 from faker import Faker
 
 # Set default socket timeout to 10 seconds to prevent hanging
@@ -12,6 +13,20 @@ socket.setdefaulttimeout(10.0)
 
 # Initialize Faker with the Philippine locale for realistic local data
 fake = Faker('en_PH')
+
+def get_initials(name, fallback="GEN"):
+    clean = re.sub(r'[^A-Za-z0-9 ]', '', name).strip()
+    if not clean:
+        return fallback
+    uppercase_letters = re.sub(r'[^A-Z0-9]', '', clean)
+    if 2 <= len(uppercase_letters) <= 6:
+        return uppercase_letters
+    words = [w for w in clean.split() if w]
+    if len(words) >= 2:
+        return ''.join(w[0] for w in words).upper()
+    elif len(words) == 1:
+        return words[0][:3].upper()
+    return fallback
 
 # Configuration
 NUM_LOOKUPS = 30 # Number of Schools/Agencies to generate
@@ -91,10 +106,6 @@ agencies_data = []
 schools_data = []
 
 for i in range(NUM_LOOKUPS):
-    # Agencies (Natural Key: 8-digit Employer/GSIS Registration Number)
-    a_code = fake.unique.numerify(text='########')
-    agency_codes.append(a_code)
-    
     is_gov = random.choice([True, False])
     agency_city = random.choice(common_cities)
     agency_address = f"{fake.building_number()}, {fake.street_name()}, Brgy. {random.choice(common_barangays)}, {agency_city}"
@@ -104,21 +115,30 @@ for i in range(NUM_LOOKUPS):
     else:
         agency_name = fake.company()
         
+    # Calculate initials + random digits
+    agency_initials = get_initials(agency_name, "AGE")
+    agency_rand = ''.join(random.choices('0123456789', k=5))
+    a_code = f"{agency_initials}-{agency_rand}"
+    agency_codes.append(a_code)
+        
     agencies_data.append({
         "agency_code": a_code,
         "agency_name": agency_name[:45],
         "agency_address": agency_address[:100]
     })
 
-    # Schools (Natural Key: 6-digit DepEd/CHED Institution ID)
-    s_code = fake.unique.numerify(text='######')
+    # Schools (Initials + random digits)
+    school_name = (fake.last_name() + " University")
+    school_initials = get_initials(school_name, "SCH")
+    school_rand = ''.join(random.choices('0123456789', k=5))
+    s_code = f"{school_initials}-{school_rand}"
     school_codes.append(s_code)
     
     school_address = f"{fake.building_number()}, {fake.street_name()}, Brgy. {random.choice(common_barangays)}, {random.choice(common_cities)}"
     
     schools_data.append({
         "school_code": s_code,
-        "school_name": (fake.last_name() + " University")[:45],
+        "school_name": school_name[:45],
         "school_address": school_address[:100]
     })
 
@@ -133,8 +153,8 @@ edu_data = []
 emp_data = []
 
 for i in range(NUM_RECORDS):
-    # Education Records (Natural Key: 12-digit Learner Reference Number / Student ID)
-    edu_id = fake.unique.numerify(text='############')
+    # Education Records (Incremental EDU-0001 format)
+    edu_id = f"EDU-{i+1:04d}"
     edu_record_ids.append(edu_id)
     
     ed_level = random.choice(["High School", "Senior High School", "Bachelor's", "Master's", "Doctorate"])
@@ -184,8 +204,8 @@ for i in range(NUM_RECORDS):
         "school_code": random.choice(school_codes)
     })
 
-    # Employment Records (Incrementing Surrogate: EMP-00001)
-    emp_id = f"EMP-{i+1:05d}"
+    # Employment Records (Incrementing Surrogate: EMP-0001)
+    emp_id = f"EMP-{i+1:04d}"
     emp_record_ids.append(emp_id)
     
     emp_data.append({
@@ -206,8 +226,12 @@ insert_bulk("employment_records", emp_data)
 applicants_data = []
 
 for i in range(NUM_RECORDS):
-    # Applicants (Unique Hash String ID instead of sequential/TIN number)
-    app_id = fake.unique.bothify(text='APP-########').upper()
+    # Applicants (First 4 letters of name + random 4 characters)
+    app_name = fake.name()[:45]
+    clean_app_name = re.sub(r'[^A-Za-z]', '', app_name).upper()
+    prefix = (clean_app_name + 'XXXX')[:4]
+    suffix = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=4))
+    app_id = f"{prefix}-{suffix}"
     applicant_ids.append(app_id)
     
     chosen_city = random.choice(common_cities)
@@ -215,7 +239,7 @@ for i in range(NUM_RECORDS):
     
     applicants_data.append({
         "applicant_id": app_id,
-        "name": fake.name()[:45],
+        "name": app_name,
         "birthdate": str(fake.date_of_birth(minimum_age=18, maximum_age=60)),
         "sex": random.choice(["Male", "Female"]),
         "birthplace": random.choice(common_cities)[:50],
@@ -264,7 +288,7 @@ for index, app_id in enumerate(applicant_ids):
     exam_date_logic = fake.date_between_dates(date_start=datetime.date(2020, 1, 1), date_end=datetime.date(2025, 12, 31)) if is_retaker else None 
     
     applications_data.append({
-        "application_no": f"APPNO-{appno_counter:05d}",
+        "application_no": f"APPNO-{appno_counter:04d}",
         "forms_date": str(assigned_forms_date),
         "exam_applied_for": "Career Service-Professional",
         "last_exam_date": str(exam_date_logic) if exam_date_logic else None,
@@ -285,7 +309,7 @@ for index, app_id in enumerate(applicant_ids):
     
     for disability in chosen_disabilities:
         disabilities_data.append({
-            "disability_id": f"DIS-{dis_counter:05d}",
+            "disability_id": f"DIS-{dis_counter:04d}",
             "disability": disability,
             "applicant_id": app_id
         })
@@ -300,7 +324,7 @@ for index, app_id in enumerate(applicant_ids):
     
     for eligibility in chosen_eligibilities:
         eligibility_proofs_data.append({
-            "eligibility_proof_id": f"ELIG-{elig_counter:05d}",
+            "eligibility_proof_id": f"EP-{elig_counter:04d}",
             "eligibility_proof_title": eligibility,
             "rating_obtained": str(round(random.uniform(75.0, 95.0), 2)),
             "date_granted": str(fake.date_between(start_date='-10y', end_date='-1y')),

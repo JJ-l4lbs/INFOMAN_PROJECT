@@ -436,6 +436,7 @@ export async function adminAddApplication(password: string, payload: {
     priority_group: string | null;
     employment_status: string;
     last_exam_date?: string;
+    is_retaker?: boolean;
   };
   education: {
     highest_education: string;
@@ -481,41 +482,71 @@ export async function adminAddApplication(password: string, payload: {
 
   const formsDate = new Date().toISOString().split('T')[0];
 
-  // 1. DUPLICATE CHECK
-  const { data: existingApplicants, error: queryErr } = await supabase
-    .from('applicants')
-    .select('applicant_id')
-    .eq('email', personal.email);
+  // 1. DUPLICATE CHECK & RETAKER RE-LINKING
+  let applicantId = '';
+  let eduRecordId = '';
+  let empRecordId: string | null = null;
+  let isNewApplicant = true;
+  let oldEmpRecordId: string | null = null;
 
-  if (queryErr) throw new Error('Database lookup error: ' + queryErr.message);
+  if (personal.is_retaker) {
+    const matchedApplicant = await findMatchingApplicant(supabase, personal.name, personal.birthdate, personal.email);
+    if (matchedApplicant) {
+      applicantId = matchedApplicant.applicant_id;
+      eduRecordId = matchedApplicant.educational_record_id;
+      empRecordId = matchedApplicant.employment_record_id;
+      isNewApplicant = false;
 
-  if (existingApplicants && existingApplicants.length > 0) {
-    const applicantIds = existingApplicants.map(a => a.applicant_id);
+      // Duplicate check for the matched applicant
+      const { data: existingApps, error: appQueryErr } = await supabase
+        .from('applications')
+        .select('forms_date')
+        .eq('applicant_id', applicantId);
 
-    const { data: existingApps, error: appQueryErr } = await supabase
-      .from('applications')
-      .select('forms_date')
-      .in('applicant_id', applicantIds);
+      if (appQueryErr) throw new Error('Database application validation check failed: ' + appQueryErr.message);
 
-    if (appQueryErr) throw new Error('Database application validation check failed: ' + appQueryErr.message);
-
-    if (existingApps && existingApps.some(app => app.forms_date === formsDate)) {
-      throw new Error(`Duplicate Blocked: An application has already been filed today under this email (${personal.email}).`);
+      if (existingApps && existingApps.some(app => app.forms_date === formsDate)) {
+        throw new Error(`Duplicate Blocked: An application has already been filed today under this email (${personal.email}).`);
+      }
     }
   }
 
-  // 2. Fetch and generate keys
-  const eduRecordId = await getNextEducationalRecordId(supabase);
-  
-  let empRecordId = null;
-  if (personal.employment_status === 'Employed') {
-    empRecordId = await getNextEmploymentRecordId(supabase);
+  // Double submission check for new applicants / safety check by email
+  if (isNewApplicant) {
+    const { data: emailMatches, error: emailMatchErr } = await supabase
+      .from('applicants')
+      .select('applicant_id')
+      .eq('email', personal.email);
+
+    if (emailMatchErr) throw new Error('Database lookup error: ' + emailMatchErr.message);
+
+    if (emailMatches && emailMatches.length > 0) {
+      const emailIds = emailMatches.map(a => a.applicant_id);
+      const { data: existingApps, error: appQueryErr } = await supabase
+        .from('applications')
+        .select('forms_date')
+        .in('applicant_id', emailIds);
+
+      if (appQueryErr) throw new Error('Database application validation check failed: ' + appQueryErr.message);
+
+      if (existingApps && existingApps.some(app => app.forms_date === formsDate)) {
+        throw new Error(`Duplicate Blocked: An application has already been filed today under this email (${personal.email}).`);
+      }
+    }
   }
 
-  const applicantId = generateApplicantId(personal.name);
+  if (isNewApplicant) {
+    // 2. Fetch and generate keys
+    eduRecordId = await getNextEducationalRecordId(supabase);
+    if (personal.employment_status === 'Employed') {
+      empRecordId = await getNextEmploymentRecordId(supabase);
+    }
+    applicantId = generateApplicantId(personal.name);
+  }
+
   const applicationNo = await getNextApplicationNo(supabase);
 
-  // Step A: Insert Education
+  // Step A: Insert or Update Education
   const targetSchoolCode = await resolveSchoolCode(
     supabase,
     education.school_code,
@@ -523,24 +554,36 @@ export async function adminAddApplication(password: string, payload: {
     education.customSchoolAddress
   );
 
-  const { error: eduErr } = await supabase
-    .from('education_records')
-    .insert({
-      educational_record_id: eduRecordId,
-      highest_education: education.highest_education,
-      completion: education.completion,
-      highest_level: (education.highest_level && education.highest_level.trim() !== '') ? education.highest_level : null,
-      graduation_date: (education.graduation_date && education.graduation_date.trim() !== '') ? education.graduation_date : null,
-      honors_received: (education.honors_received && education.honors_received.trim() !== '') ? education.honors_received : null,
-      program_title: education.program_title,
-      major: education.major,
-      inclusive_years: education.inclusive_years,
-      school_code: targetSchoolCode
-    });
-  if (eduErr) throw new Error('Failed to create education record: ' + eduErr.message);
+  const eduPayload = {
+    highest_education: education.highest_education,
+    completion: education.completion,
+    highest_level: (education.highest_level && education.highest_level.trim() !== '') ? education.highest_level : null,
+    graduation_date: (education.graduation_date && education.graduation_date.trim() !== '') ? education.graduation_date : null,
+    honors_received: (education.honors_received && education.honors_received.trim() !== '') ? education.honors_received : null,
+    program_title: education.program_title,
+    major: education.major,
+    inclusive_years: education.inclusive_years,
+    school_code: targetSchoolCode
+  };
 
-  // Step B: Insert Employment
-  if (personal.employment_status === 'Employed' && empRecordId && employment) {
+  if (isNewApplicant) {
+    const { error: eduErr } = await supabase
+      .from('education_records')
+      .insert({
+        educational_record_id: eduRecordId,
+        ...eduPayload
+      });
+    if (eduErr) throw new Error('Failed to create education record: ' + eduErr.message);
+  } else {
+    const { error: eduErr } = await supabase
+      .from('education_records')
+      .update(eduPayload)
+      .eq('educational_record_id', eduRecordId);
+    if (eduErr) throw new Error('Failed to update education record: ' + eduErr.message);
+  }
+
+  // Step B: Insert or Update Employment
+  if (personal.employment_status === 'Employed' && employment) {
     const targetAgencyCode = await resolveAgencyCode(
       supabase,
       employment.agency_code,
@@ -548,41 +591,79 @@ export async function adminAddApplication(password: string, payload: {
       employment.customAgencyAddress
     );
 
-    const { error: empErr } = await supabase
-      .from('employment_records')
-      .insert({
-        employment_record_id: empRecordId,
-        job_title: employment.job_title,
-        years_in_agency: employment.years_in_agency,
-        appointment_status: employment.appointment_status,
-        agency_code: targetAgencyCode
-      });
-    if (empErr) throw new Error('Failed to create employment record: ' + empErr.message);
+    if (empRecordId) {
+      const { error: empErr } = await supabase
+        .from('employment_records')
+        .update({
+          job_title: employment.job_title,
+          years_in_agency: employment.years_in_agency,
+          appointment_status: employment.appointment_status,
+          agency_code: targetAgencyCode
+        })
+        .eq('employment_record_id', empRecordId);
+      if (empErr) throw new Error('Failed to update employment record: ' + empErr.message);
+    } else {
+      empRecordId = await getNextEmploymentRecordId(supabase);
+      const { error: empErr } = await supabase
+        .from('employment_records')
+        .insert({
+          employment_record_id: empRecordId,
+          job_title: employment.job_title,
+          years_in_agency: employment.years_in_agency,
+          appointment_status: employment.appointment_status,
+          agency_code: targetAgencyCode
+        });
+      if (empErr) throw new Error('Failed to create employment record: ' + empErr.message);
+    }
+  } else if (personal.employment_status === 'Unemployed' && empRecordId) {
+    oldEmpRecordId = empRecordId;
+    empRecordId = null;
   }
 
-  // Step C: Insert Applicant record
-  const { error: applicantErr } = await supabase
-    .from('applicants')
-    .insert({
-      applicant_id: applicantId,
-      name: personal.name,
-      birthdate: personal.birthdate,
-      sex: personal.sex,
-      birthplace: personal.birthplace,
-      citizenship: personal.citizenship,
-      mother_maiden_name: personal.mother_maiden_name,
-      permanent_address: personal.permanent_address,
-      zip_code: personal.zip_code,
-      mobile_number: personal.mobile_number,
-      telephone_number: (personal.telephone_number && personal.telephone_number.trim() !== '') ? personal.telephone_number : null,
-      email: personal.email,
-      civil_status: personal.civil_status,
-      priority_group: (personal.priority_group && personal.priority_group.trim() !== '') ? personal.priority_group : null,
-      employment_status: personal.employment_status,
-      educational_record_id: eduRecordId,
-      employment_record_id: empRecordId
-    });
-  if (applicantErr) throw new Error('Failed to create applicant profile: ' + applicantErr.message);
+  // Step C: Insert or Update Applicant record
+  const applicantPayload = {
+    name: personal.name,
+    birthdate: personal.birthdate,
+    sex: personal.sex,
+    birthplace: personal.birthplace,
+    citizenship: personal.citizenship,
+    mother_maiden_name: personal.mother_maiden_name,
+    permanent_address: personal.permanent_address,
+    zip_code: personal.zip_code,
+    mobile_number: personal.mobile_number,
+    telephone_number: (personal.telephone_number && personal.telephone_number.trim() !== '') ? personal.telephone_number : null,
+    email: personal.email,
+    civil_status: personal.civil_status,
+    priority_group: (personal.priority_group && personal.priority_group.trim() !== '') ? personal.priority_group : null,
+    employment_status: personal.employment_status,
+    educational_record_id: eduRecordId,
+    employment_record_id: empRecordId
+  };
+
+  if (isNewApplicant) {
+    const { error: applicantErr } = await supabase
+      .from('applicants')
+      .insert({
+        applicant_id: applicantId,
+        ...applicantPayload
+      });
+    if (applicantErr) throw new Error('Failed to create applicant profile: ' + applicantErr.message);
+  } else {
+    const { error: applicantErr } = await supabase
+      .from('applicants')
+      .update(applicantPayload)
+      .eq('applicant_id', applicantId);
+    if (applicantErr) throw new Error('Failed to update applicant profile: ' + applicantErr.message);
+  }
+
+  // Clean up unlinked employment records
+  if (oldEmpRecordId) {
+    const { error: delEmpErr } = await supabase
+      .from('employment_records')
+      .delete()
+      .eq('employment_record_id', oldEmpRecordId);
+    if (delEmpErr) throw new Error('Failed to clean up unlinked employment record: ' + delEmpErr.message);
+  }
 
   // Step D: Insert Application record
   const { error: appErr } = await supabase
@@ -601,6 +682,14 @@ export async function adminAddApplication(password: string, payload: {
   if (appErr) throw new Error('Failed to create application details: ' + appErr.message);
 
   // Step E: Insert Disabilities
+  if (!isNewApplicant) {
+    const { error: delDisErr } = await supabase
+      .from('disabilities')
+      .delete()
+      .eq('applicant_id', applicantId);
+    if (delDisErr) throw new Error('Failed to clear old disabilities: ' + delDisErr.message);
+  }
+
   if (disabilities && disabilities.length > 0) {
     let disNum = await getNextDisabilityIdStart(supabase);
     const disabilityRecords = disabilities.map(disName => ({
@@ -616,6 +705,14 @@ export async function adminAddApplication(password: string, payload: {
   }
 
   // Step F: Insert Eligibility Proofs
+  if (!isNewApplicant) {
+    const { error: delEligErr } = await supabase
+      .from('eligibility_proofs')
+      .delete()
+      .eq('applicant_id', applicantId);
+    if (delEligErr) throw new Error('Failed to clear old eligibility proofs: ' + delEligErr.message);
+  }
+
   if (eligibilityProofs && eligibilityProofs.length > 0) {
     for (const proof of eligibilityProofs) {
       if (proof.isCustom) {
@@ -638,4 +735,52 @@ export async function adminAddApplication(password: string, payload: {
   }
 
   return { success: true, applicantId, applicationNo };
+}
+
+/**
+ * Find an existing applicant using 2-out-of-3 matching logic:
+ * - Email, Birthdate, Name
+ * - If at least two fields match exactly, it is considered a match.
+ */
+async function findMatchingApplicant(
+  supabase: any,
+  subName: string,
+  subBirthdate: string,
+  subEmail: string
+) {
+  const cleanSubName = subName.trim();
+  const cleanSubEmail = subEmail.trim();
+
+  const { data: candidates, error } = await supabase
+    .from('applicants')
+    .select('applicant_id, educational_record_id, employment_record_id, name, birthdate, email')
+    .or(`email.eq."${cleanSubEmail}",birthdate.eq."${subBirthdate}",name.eq."${cleanSubName}"`);
+
+  if (error || !candidates || candidates.length === 0) {
+    return null;
+  }
+
+  const lowerSubName = cleanSubName.toLowerCase();
+  const lowerSubEmail = cleanSubEmail.toLowerCase();
+
+  let bestMatch: any = null;
+  let bestScore = 0;
+
+  for (const c of candidates) {
+    const nameMatch = c.name?.trim().toLowerCase() === lowerSubName;
+    const birthdateMatch = c.birthdate === subBirthdate;
+    const emailMatch = c.email?.trim().toLowerCase() === lowerSubEmail;
+
+    let score = 0;
+    if (nameMatch) score++;
+    if (birthdateMatch) score++;
+    if (emailMatch) score++;
+
+    if (score >= 2 && score > bestScore) {
+      bestScore = score;
+      bestMatch = c;
+    }
+  }
+
+  return bestMatch;
 }

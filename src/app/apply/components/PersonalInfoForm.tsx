@@ -18,6 +18,7 @@ interface PersonalInfoFormProps {
     civil_status: string;
     priority_group: string;
     employment_status: string;
+    is_retaker?: boolean;
   };
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
 }
@@ -118,6 +119,20 @@ export default function PersonalInfoForm({ personal, onChange }: PersonalInfoFor
           <option>Unemployed</option>
           <option>Employed</option>
         </select>
+      </div>
+
+      <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
+        <input 
+          type="checkbox" 
+          name="is_retaker" 
+          checked={personal.is_retaker || false} 
+          onChange={onChange} 
+          id="is_retaker" 
+          style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
+        />
+        <label htmlFor="is_retaker" style={{ fontSize: '0.95rem', cursor: 'pointer', fontWeight: 500 }}>
+          I am a retaker (I have previously applied for / taken this exam)
+        </label>
       </div>
     </section>
   );

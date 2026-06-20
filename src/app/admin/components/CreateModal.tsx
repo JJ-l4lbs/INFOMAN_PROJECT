@@ -30,6 +30,7 @@ interface CreateModalProps {
       civil_status: string;
       priority_group: string;
       employment_status: string;
+      is_retaker?: boolean;
     };
     education: {
       highest_education: string;
@@ -267,7 +268,7 @@ export default function CreateModal({
                 <input type="text" value={formValues.personal.mother_maiden_name} onChange={e => handleFormChange('personal', 'mother_maiden_name', e.target.value)} className="form-input" required />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
               <div className="form-group">
                 <label className="form-label">Priority Group</label>
                 <select value={formValues.personal.priority_group || 'None'} onChange={e => handleFormChange('personal', 'priority_group', e.target.value)} className="form-select">
@@ -286,6 +287,18 @@ export default function CreateModal({
                   <option>Student</option>
                   <option>Retired</option>
                 </select>
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
+                <input 
+                  type="checkbox" 
+                  checked={formValues.personal.is_retaker || false} 
+                  onChange={e => handleFormChange('personal', 'is_retaker', e.target.checked)} 
+                  id="is_retaker_admin" 
+                  style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
+                />
+                <label htmlFor="is_retaker_admin" style={{ fontSize: '0.875rem', cursor: 'pointer', fontWeight: 500 }}>
+                  Is Retaker? (Link Profile)
+                </label>
               </div>
             </div>
 

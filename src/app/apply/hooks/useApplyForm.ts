@@ -57,7 +57,8 @@ export function useApplyForm() {
     email: '',
     civil_status: 'Single',
     priority_group: 'None',
-    employment_status: 'Unemployed'
+    employment_status: 'Unemployed',
+    is_retaker: false
   });
 
   const [education, setEducation] = useState({
@@ -158,7 +159,8 @@ export function useApplyForm() {
 
   // --- DYNAMIC FORM HANDLERS ---
   const handlePersonalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name, type } = e.target;
+    const value = type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
     setPersonal(prev => ({ ...prev, [name]: value }));
   };
 

@@ -69,6 +69,7 @@ export async function publicSubmitApplication(payload: {
     priority_group: string | null;
     employment_status: string;
     last_exam_date?: string;
+    is_retaker?: boolean;
   };
   education: {
     highest_education: string;
@@ -109,90 +110,118 @@ export async function publicSubmitApplication(payload: {
   const targetExamPlace = 'NCR School Center';
   const targetRegionalOffice = 'NCR';
 
-  // 1. BUSINESS RULE CHECK: Applicant may apply more than once so long as it is not on the same date and not during an exam.
-  const { data: existingApplicants, error: applicantQueryErr } = await supabase
-    .from('applicants')
-    .select('applicant_id')
-    .eq('email', personal.email);
+  let applicantId = '';
+  let eduRecordId = '';
+  let empRecordId: string | null = null;
+  let isNewApplicant = true;
+  let oldEmpRecordId: string | null = null;
 
-  if (applicantQueryErr) throw new Error('Database check failed: ' + applicantQueryErr.message);
+  // 1. BUSINESS RULE CHECK & RETAKER RE-LINKING
+  if (personal.is_retaker) {
+    const matchedApplicant = await findMatchingApplicant(supabase, personal.name, personal.birthdate, personal.email);
+    if (matchedApplicant) {
+      applicantId = matchedApplicant.applicant_id;
+      eduRecordId = matchedApplicant.educational_record_id;
+      empRecordId = matchedApplicant.employment_record_id;
+      isNewApplicant = false;
 
-  if (existingApplicants && existingApplicants.length > 0) {
-    const applicantIds = existingApplicants.map(app => app.applicant_id);
+      // Duplicate & active registration checks for the matched applicant
+      const { data: existingApplications, error: appQueryErr } = await supabase
+        .from('applications')
+        .select('forms_date, exam_date')
+        .eq('applicant_id', applicantId);
 
-    // Fetch their applications
-    const { data: existingApplications, error: appQueryErr } = await supabase
-      .from('applications')
-      .select('forms_date, exam_date')
-      .in('applicant_id', applicantIds);
+      if (appQueryErr) throw new Error('Database applications query failed: ' + appQueryErr.message);
 
-    if (appQueryErr) throw new Error('Database applications query failed: ' + appQueryErr.message);
+      if (existingApplications && existingApplications.length > 0) {
+        const hasSameDayApply = existingApplications.some(app => app.forms_date === formsDate);
+        if (hasSameDayApply) {
+          throw new Error(`An application has already been filed today (${formsDate}) under this applicant record. Please try again on a different date.`);
+        }
 
-    if (existingApplications && existingApplications.length > 0) {
-      // Check for duplicate forms_date (same day)
-      const hasSameDayApply = existingApplications.some(app => app.forms_date === formsDate);
-      if (hasSameDayApply) {
+        const todayMs = new Date().getTime();
+        const hasActiveExamRegistration = existingApplications.some(app => {
+          const examTime = new Date(app.exam_date).getTime();
+          return examTime > todayMs;
+        });
+
+        if (hasActiveExamRegistration) {
+          throw new Error('You are already registered for an upcoming exam. You cannot apply again until the current exam cycle is completed.');
+        }
+      }
+    }
+  }
+
+  // Double submission check for new applicants / safety check by email
+  if (isNewApplicant) {
+    const { data: emailMatches, error: emailMatchErr } = await supabase
+      .from('applicants')
+      .select('applicant_id')
+      .eq('email', personal.email);
+
+    if (emailMatchErr) throw new Error('Database check failed: ' + emailMatchErr.message);
+
+    if (emailMatches && emailMatches.length > 0) {
+      const emailIds = emailMatches.map(a => a.applicant_id);
+      const { data: existingApps, error: appQueryErr } = await supabase
+        .from('applications')
+        .select('forms_date')
+        .in('applicant_id', emailIds);
+
+      if (appQueryErr) throw new Error('Database applications query failed: ' + appQueryErr.message);
+
+      if (existingApps && existingApps.some(app => app.forms_date === formsDate)) {
         throw new Error(`An application has already been filed today (${formsDate}) under this email. Please try again on a different date.`);
       }
-
-      // Check if there's a scheduled exam in the future (during an active exam cycle)
-      const todayMs = new Date().getTime();
-      const hasActiveExamRegistration = existingApplications.some(app => {
-        const examTime = new Date(app.exam_date).getTime();
-        return examTime > todayMs; // Registered for a future exam that hasn't happened yet
-      });
-
-      if (hasActiveExamRegistration) {
-        throw new Error('You are already registered for an upcoming exam. You cannot apply again until the current exam cycle is completed.');
-      }
     }
   }
 
-  // 2. FETCH NEXT SEQUENTIAL KEYS FROM THE DATABASE
-  // A. Educational Record ID (EDU-0001 format)
-  const { data: maxEdu } = await supabase
-    .from('education_records')
-    .select('educational_record_id')
-    .like('educational_record_id', 'EDU-%')
-    .order('educational_record_id', { ascending: false });
-  let eduNum = 1;
-  if (maxEdu && maxEdu.length > 0) {
-    const validEdu = maxEdu.find(e => {
-      const num = parseInt(e.educational_record_id.replace('EDU-', ''));
-      return !isNaN(num) && num < 10000;
-    });
-    if (validEdu) {
-      eduNum = parseInt(validEdu.educational_record_id.replace('EDU-', '')) + 1;
-    }
-  }
-  const eduRecordId = `EDU-${String(eduNum).padStart(4, '0')}`;
-
-  // B. Employment Record ID (EMP-0001 format)
-  let empRecordId = null;
-  if (personal.employment_status === 'Employed') {
-    const { data: maxEmp } = await supabase
-      .from('employment_records')
-      .select('employment_record_id')
-      .like('employment_record_id', 'EMP-%')
-      .order('employment_record_id', { ascending: false });
-    let empNum = 1;
-    if (maxEmp && maxEmp.length > 0) {
-      const validEmp = maxEmp.find(e => {
-        const num = parseInt(e.employment_record_id.replace('EMP-', ''));
+  if (isNewApplicant) {
+    // 2. FETCH NEXT SEQUENTIAL KEYS FROM THE DATABASE
+    // A. Educational Record ID (EDU-0001 format)
+    const { data: maxEdu } = await supabase
+      .from('education_records')
+      .select('educational_record_id')
+      .like('educational_record_id', 'EDU-%')
+      .order('educational_record_id', { ascending: false });
+    let eduNum = 1;
+    if (maxEdu && maxEdu.length > 0) {
+      const validEdu = maxEdu.find(e => {
+        const num = parseInt(e.educational_record_id.replace('EDU-', ''));
         return !isNaN(num) && num < 10000;
       });
-      if (validEmp) {
-        empNum = parseInt(validEmp.employment_record_id.replace('EMP-', '')) + 1;
+      if (validEdu) {
+        eduNum = parseInt(validEdu.educational_record_id.replace('EDU-', '')) + 1;
       }
     }
-    empRecordId = `EMP-${String(empNum).padStart(4, '0')}`;
-  }
+    eduRecordId = `EDU-${String(eduNum).padStart(4, '0')}`;
 
-  // C. Applicant ID (First 4 letters of name + random 4 characters, e.g. JOHN-A1B2)
-  const cleanNameForId = personal.name.replace(/[^A-Za-z]/g, '').toUpperCase();
-  const namePrefix = cleanNameForId.padEnd(4, 'X').substring(0, 4);
-  const nameSuffix = generateAlphaNumericId(4);
-  const applicantId = `${namePrefix}-${nameSuffix}`;
+    // B. Employment Record ID (EMP-0001 format)
+    if (personal.employment_status === 'Employed') {
+      const { data: maxEmp } = await supabase
+        .from('employment_records')
+        .select('employment_record_id')
+        .like('employment_record_id', 'EMP-%')
+        .order('employment_record_id', { ascending: false });
+      let empNum = 1;
+      if (maxEmp && maxEmp.length > 0) {
+        const validEmp = maxEmp.find(e => {
+          const num = parseInt(e.employment_record_id.replace('EMP-', ''));
+          return !isNaN(num) && num < 10000;
+        });
+        if (validEmp) {
+          empNum = parseInt(validEmp.employment_record_id.replace('EMP-', '')) + 1;
+        }
+      }
+      empRecordId = `EMP-${String(empNum).padStart(4, '0')}`;
+    }
+
+    // C. Applicant ID (First 4 letters of name + random 4 characters, e.g. JOHN-A1B2)
+    const cleanNameForId = personal.name.replace(/[^A-Za-z]/g, '').toUpperCase();
+    const namePrefix = cleanNameForId.padEnd(4, 'X').substring(0, 4);
+    const nameSuffix = generateAlphaNumericId(4);
+    applicantId = `${namePrefix}-${nameSuffix}`;
+  }
 
   // D. Application No (APPNO-0001 format)
   const { data: maxApp } = await supabase
@@ -212,7 +241,7 @@ export async function publicSubmitApplication(payload: {
     }
   }
 
-  // Step A: Insert Education Record (Handle custom school write-in)
+  // Step A: Insert or Update Education Record (Handle custom school write-in)
   let targetSchoolCode = education.school_code;
   if (education.school_code === 'OTHER') {
     const schoolInitials = getInitials(education.customSchoolName || '', 'SCH');
@@ -230,24 +259,36 @@ export async function publicSubmitApplication(payload: {
     if (newSchoolErr) throw new Error('Failed to register custom school: ' + newSchoolErr.message);
   }
 
-  const { error: eduErr } = await supabase
-    .from('education_records')
-    .insert({
-      educational_record_id: eduRecordId,
-      highest_education: education.highest_education,
-      completion: education.completion,
-      highest_level: education.highest_level,
-      graduation_date: education.graduation_date || null,
-      honors_received: education.honors_received || null,
-      program_title: education.program_title,
-      major: education.major,
-      inclusive_years: education.inclusive_years,
-      school_code: targetSchoolCode
-    });
-  if (eduErr) throw new Error('Failed to create Education Record: ' + eduErr.message);
+  const eduPayload = {
+    highest_education: education.highest_education,
+    completion: education.completion,
+    highest_level: education.highest_level,
+    graduation_date: education.graduation_date || null,
+    honors_received: education.honors_received || null,
+    program_title: education.program_title,
+    major: education.major,
+    inclusive_years: education.inclusive_years,
+    school_code: targetSchoolCode
+  };
 
-  // Step B: Insert Employment Record (Handle custom agency write-in)
-  if (personal.employment_status === 'Employed' && empRecordId && employment) {
+  if (isNewApplicant) {
+    const { error: eduErr } = await supabase
+      .from('education_records')
+      .insert({
+        educational_record_id: eduRecordId,
+        ...eduPayload
+      });
+    if (eduErr) throw new Error('Failed to create Education Record: ' + eduErr.message);
+  } else {
+    const { error: eduErr } = await supabase
+      .from('education_records')
+      .update(eduPayload)
+      .eq('educational_record_id', eduRecordId);
+    if (eduErr) throw new Error('Failed to update Education Record: ' + eduErr.message);
+  }
+
+  // Step B: Insert or Update Employment Record (Handle custom agency write-in)
+  if (personal.employment_status === 'Employed' && employment) {
     let targetAgencyCode = employment.agency_code;
     if (employment.agency_code === 'OTHER') {
       const agencyInitials = getInitials(employment.customAgencyName || '', 'AGE');
@@ -265,41 +306,95 @@ export async function publicSubmitApplication(payload: {
       if (newAgencyErr) throw new Error('Failed to register custom employment agency: ' + newAgencyErr.message);
     }
 
-    const { error: empErr } = await supabase
-      .from('employment_records')
-      .insert({
-        employment_record_id: empRecordId,
-        job_title: employment.job_title,
-        years_in_agency: employment.years_in_agency,
-        appointment_status: employment.appointment_status,
-        agency_code: targetAgencyCode
-      });
-    if (empErr) throw new Error('Failed to create Employment Record: ' + empErr.message);
+    if (empRecordId) {
+      const { error: empErr } = await supabase
+        .from('employment_records')
+        .update({
+          job_title: employment.job_title,
+          years_in_agency: employment.years_in_agency,
+          appointment_status: employment.appointment_status,
+          agency_code: targetAgencyCode
+        })
+        .eq('employment_record_id', empRecordId);
+      if (empErr) throw new Error('Failed to update Employment Record: ' + empErr.message);
+    } else {
+      const { data: maxEmp } = await supabase
+        .from('employment_records')
+        .select('employment_record_id')
+        .like('employment_record_id', 'EMP-%')
+        .order('employment_record_id', { ascending: false });
+      let empNum = 1;
+      if (maxEmp && maxEmp.length > 0) {
+        const validEmp = maxEmp.find(e => {
+          const num = parseInt(e.employment_record_id.replace('EMP-', ''));
+          return !isNaN(num) && num < 10000;
+        });
+        if (validEmp) {
+          empNum = parseInt(validEmp.employment_record_id.replace('EMP-', '')) + 1;
+        }
+      }
+      empRecordId = `EMP-${String(empNum).padStart(4, '0')}`;
+
+      const { error: empErr } = await supabase
+        .from('employment_records')
+        .insert({
+          employment_record_id: empRecordId,
+          job_title: employment.job_title,
+          years_in_agency: employment.years_in_agency,
+          appointment_status: employment.appointment_status,
+          agency_code: targetAgencyCode
+        });
+      if (empErr) throw new Error('Failed to create Employment Record: ' + empErr.message);
+    }
+  } else if (personal.employment_status === 'Unemployed' && empRecordId) {
+    oldEmpRecordId = empRecordId;
+    empRecordId = null;
   }
 
-  // Step C: Insert Applicant
-  const { error: applicantErr } = await supabase
-    .from('applicants')
-    .insert({
-      applicant_id: applicantId,
-      name: personal.name,
-      birthdate: personal.birthdate,
-      sex: personal.sex,
-      birthplace: personal.birthplace,
-      citizenship: personal.citizenship,
-      mother_maiden_name: personal.mother_maiden_name,
-      permanent_address: personal.permanent_address,
-      zip_code: personal.zip_code,
-      mobile_number: personal.mobile_number,
-      telephone_number: personal.telephone_number || null,
-      email: personal.email,
-      civil_status: personal.civil_status,
-      priority_group: personal.priority_group || null,
-      employment_status: personal.employment_status,
-      educational_record_id: eduRecordId,
-      employment_record_id: empRecordId
-    });
-  if (applicantErr) throw new Error('Failed to create Applicant record: ' + applicantErr.message);
+  // Step C: Insert or Update Applicant
+  const applicantPayload = {
+    name: personal.name,
+    birthdate: personal.birthdate,
+    sex: personal.sex,
+    birthplace: personal.birthplace,
+    citizenship: personal.citizenship,
+    mother_maiden_name: personal.mother_maiden_name,
+    permanent_address: personal.permanent_address,
+    zip_code: personal.zip_code,
+    mobile_number: personal.mobile_number,
+    telephone_number: personal.telephone_number || null,
+    email: personal.email,
+    civil_status: personal.civil_status,
+    priority_group: personal.priority_group || null,
+    employment_status: personal.employment_status,
+    educational_record_id: eduRecordId,
+    employment_record_id: empRecordId
+  };
+
+  if (isNewApplicant) {
+    const { error: applicantErr } = await supabase
+      .from('applicants')
+      .insert({
+        applicant_id: applicantId,
+        ...applicantPayload
+      });
+    if (applicantErr) throw new Error('Failed to create Applicant record: ' + applicantErr.message);
+  } else {
+    const { error: applicantErr } = await supabase
+      .from('applicants')
+      .update(applicantPayload)
+      .eq('applicant_id', applicantId);
+    if (applicantErr) throw new Error('Failed to update Applicant record: ' + applicantErr.message);
+  }
+
+  // Clean up unlinked employment record if any
+  if (oldEmpRecordId) {
+    const { error: delEmpErr } = await supabase
+      .from('employment_records')
+      .delete()
+      .eq('employment_record_id', oldEmpRecordId);
+    if (delEmpErr) throw new Error('Failed to clean up unlinked employment record: ' + delEmpErr.message);
+  }
 
   // Step D: Insert Application
   const { error: appErr } = await supabase
@@ -318,6 +413,14 @@ export async function publicSubmitApplication(payload: {
   if (appErr) throw new Error('Failed to file Application: ' + appErr.message);
 
   // Step E: Insert Disabilities (Handle custom disability write-in)
+  if (!isNewApplicant) {
+    const { error: delDisErr } = await supabase
+      .from('disabilities')
+      .delete()
+      .eq('applicant_id', applicantId);
+    if (delDisErr) throw new Error('Failed to clear old disabilities: ' + delDisErr.message);
+  }
+
   const disabilityRecords = [];
   const finalSelectedDis = [...disabilities];
   if (customDisability && customDisability.trim() !== '') {
@@ -386,6 +489,14 @@ export async function publicSubmitApplication(payload: {
   }
 
   // Step F: Insert Eligibility Proofs (Handle custom eligibility write-ins)
+  if (!isNewApplicant) {
+    const { error: delEligErr } = await supabase
+      .from('eligibility_proofs')
+      .delete()
+      .eq('applicant_id', applicantId);
+    if (delEligErr) throw new Error('Failed to clear old eligibility proofs: ' + delEligErr.message);
+  }
+
   if (eligibilityProofs.length > 0) {
     for (const proof of eligibilityProofs) {
       if (proof.isCustom) {
@@ -450,4 +561,52 @@ export async function publicSubmitApplication(payload: {
   }
 
   return { applicantId, applicationNo };
+}
+
+/**
+ * Find an existing applicant using 2-out-of-3 matching logic:
+ * - Email, Birthdate, Name
+ * - If at least two fields match exactly, it is considered a match.
+ */
+async function findMatchingApplicant(
+  supabase: any,
+  subName: string,
+  subBirthdate: string,
+  subEmail: string
+) {
+  const cleanSubName = subName.trim();
+  const cleanSubEmail = subEmail.trim();
+
+  const { data: candidates, error } = await supabase
+    .from('applicants')
+    .select('applicant_id, educational_record_id, employment_record_id, name, birthdate, email')
+    .or(`email.eq."${cleanSubEmail}",birthdate.eq."${subBirthdate}",name.eq."${cleanSubName}"`);
+
+  if (error || !candidates || candidates.length === 0) {
+    return null;
+  }
+
+  const lowerSubName = cleanSubName.toLowerCase();
+  const lowerSubEmail = cleanSubEmail.toLowerCase();
+
+  let bestMatch: any = null;
+  let bestScore = 0;
+
+  for (const c of candidates) {
+    const nameMatch = c.name?.trim().toLowerCase() === lowerSubName;
+    const birthdateMatch = c.birthdate === subBirthdate;
+    const emailMatch = c.email?.trim().toLowerCase() === lowerSubEmail;
+
+    let score = 0;
+    if (nameMatch) score++;
+    if (birthdateMatch) score++;
+    if (emailMatch) score++;
+
+    if (score >= 2 && score > bestScore) {
+      bestScore = score;
+      bestMatch = c;
+    }
+  }
+
+  return bestMatch;
 }

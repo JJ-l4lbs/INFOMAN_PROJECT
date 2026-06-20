@@ -116,7 +116,8 @@ export function useAdminDashboard() {
       email: '',
       civil_status: 'Single',
       priority_group: 'None',
-      employment_status: 'Unemployed'
+      employment_status: 'Unemployed',
+      is_retaker: false
     },
     education: {
       highest_education: "Bachelor's",
@@ -432,7 +433,8 @@ export function useAdminDashboard() {
         email: selectedApp.applicants?.email || '',
         civil_status: selectedApp.applicants?.civil_status || 'Single',
         priority_group: selectedApp.applicants?.priority_group || 'None',
-        employment_status: selectedApp.applicants?.employment_status || 'Unemployed'
+        employment_status: selectedApp.applicants?.employment_status || 'Unemployed',
+        is_retaker: false
       },
       education: {
         highest_education: detailedData.education?.highest_education || "Bachelor's",

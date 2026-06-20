@@ -1,5 +1,4 @@
 "use client";
-
 import React from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { Application, Applicant, EducationRecord, EmploymentRecord, School, Agency } from '@/types';
@@ -50,31 +49,37 @@ interface EditModalProps {
       major: string;
       inclusive_years: string;
       school_code: string;
+      customSchoolName?: string;
+      customSchoolAddress?: string;
     };
     employment: {
       job_title: string;
       years_in_agency: number;
       appointment_status: string;
       agency_code: string;
+      customAgencyName?: string;
+      customAgencyAddress?: string;
     };
-    disabilities: {
-      visual: boolean;
-      hearing: boolean;
-      orthopedic: boolean;
-    };
+    disabilities: string[];
   };
   handleFormChange: (section: 'application' | 'personal' | 'education' | 'employment', field: string, value: any) => void;
-  handleDisabilityChange: (field: 'visual' | 'hearing' | 'orthopedic', checked: boolean) => void;
+  handleDisabilityChange: (name: string, checked: boolean) => void;
   activeTab: 'exam' | 'personal' | 'education' | 'employment' | 'disabilities';
   setActiveTab: (tab: 'exam' | 'personal' | 'education' | 'employment' | 'disabilities') => void;
-  newProof: { title: string; rating: string; dateGranted: string; placeTaken: string };
-  setNewProof: React.Dispatch<React.SetStateAction<{ title: string; rating: string; dateGranted: string; placeTaken: string }>>;
+  newProof: { title: string; customTitle: string; rating: string; dateGranted: string; placeTaken: string };
+  setNewProof: React.Dispatch<React.SetStateAction<{ title: string; customTitle: string; rating: string; dateGranted: string; placeTaken: string }>>;
   addProof: () => void;
-  proofs: Array<{ title: string; rating: string; dateGranted: string; placeTaken: string }>;
+  proofs: Array<{ title: string; rating: string; dateGranted: string; placeTaken: string; isCustom?: boolean }>;
   removeProof: (idx: number) => void;
   savingModal: boolean;
   schools: School[];
   agencies: Agency[];
+  disabilityLookups: any[];
+  eligibilityLookups: any[];
+  customDisability: string;
+  setCustomDisability: (val: string) => void;
+  showCustomDisability: boolean;
+  setShowCustomDisability: (val: boolean) => void;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -132,6 +137,19 @@ const modalFooterStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-tertiary)'
 };
 
+const tabButtonStyle = (active: boolean): React.CSSProperties => ({
+  padding: '0.6rem 1rem',
+  fontSize: '0.85rem',
+  fontWeight: 600,
+  borderRadius: 'var(--radius-md) var(--radius-md) 0 0',
+  border: '1px solid transparent',
+  borderBottom: active ? '2px solid var(--color-primary)' : 'none',
+  backgroundColor: active ? 'var(--bg-secondary)' : 'transparent',
+  color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease'
+});
+
 export default function EditModal({
   onClose,
   onSubmit,
@@ -149,49 +167,46 @@ export default function EditModal({
   removeProof,
   savingModal,
   schools,
-  agencies
+  agencies,
+  disabilityLookups,
+  eligibilityLookups,
+  customDisability,
+  setCustomDisability,
+  showCustomDisability,
+  setShowCustomDisability
 }: EditModalProps) {
   return (
     <div style={overlayStyle}>
       <div style={modalStyle}>
         <div style={modalHeaderStyle}>
-          <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Edit Application Profile ({selectedApp.application_no})</h2>
+          <div>
+            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Edit Registration Profile</h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ref No: {selectedApp.application_no} &bull; ID: {selectedApp.applicant_id}</span>
+          </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
             <X size={20} />
           </button>
         </div>
         
-        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-          {/* Tab Selector */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--bg-tertiary)' }}>
-            {(['exam', 'personal', 'education', 'employment', 'disabilities'] as const).map(tab => {
-              const isActive = activeTab === tab;
-              // Skip employment tab if applicant is not employed
-              if (tab === 'employment' && formValues.personal.employment_status !== 'Employed') return null;
-              
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: '0.75rem 1.25rem',
-                    background: isActive ? 'var(--bg-secondary)' : 'none',
-                    border: 'none',
-                    borderBottom: isActive ? '2px solid var(--color-primary)' : 'none',
-                    color: isActive ? 'var(--color-primary)' : 'var(--text-secondary)',
-                    fontWeight: isActive ? 600 : 400,
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    textTransform: 'capitalize'
-                  }}
-                >
-                  {tab === 'exam' ? 'Exam Details' : tab === 'personal' ? 'Personal Data' : tab === 'education' ? 'Education' : tab === 'employment' ? 'Employment' : 'Disabilities & Proofs'}
-                </button>
-              );
-            })}
-          </div>
+        {/* Navigation Tabs Header */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', padding: '0 1rem', backgroundColor: 'var(--bg-tertiary)' }}>
+          {(['exam', 'personal', 'education', 'employment', 'disabilities'] as const).map(tab => {
+            if (tab === 'employment' && formValues.personal.employment_status !== 'Employed') return null;
+            const isActive = activeTab === tab;
+            return (
+              <button 
+                key={tab} 
+                type="button" 
+                onClick={() => setActiveTab(tab)}
+                style={tabButtonStyle(isActive)}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            );
+          })}
+        </div>
 
+        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div style={modalBodyStyle}>
             {actionError && (
               <div className="card" style={{ padding: '1rem', color: 'var(--color-rejected)', border: '1px solid var(--color-rejected-border)', backgroundColor: 'var(--color-rejected-bg)' }}>
@@ -236,7 +251,7 @@ export default function EditModal({
               </div>
             )}
 
-            {/* TAB CONTENT: Personal Data */}
+            {/* TAB CONTENT: Personal */}
             {activeTab === 'personal' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem' }}>
@@ -267,7 +282,7 @@ export default function EditModal({
                   </div>
                   <div className="form-group">
                     <label className="form-label">Telephone (Optional)</label>
-                    <input type="text" value={formValues.personal.telephone_number || ''} onChange={e => handleFormChange('personal', 'telephone_number', e.target.value)} className="form-input" />
+                    <input type="text" value={formValues.personal.telephone_number} onChange={e => handleFormChange('personal', 'telephone_number', e.target.value)} className="form-input" />
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem' }}>
@@ -366,10 +381,25 @@ export default function EditModal({
                   <div className="form-group">
                     <label className="form-label">School Affiliation</label>
                     <select value={formValues.education.school_code} onChange={e => handleFormChange('education', 'school_code', e.target.value)} className="form-select">
-                      {schools.map(s => <option key={s.school_code} value={s.school_code}>{s.school_name}</option>)}
+                      {schools.filter(s => (s as any).is_registered !== false).map(s => <option key={s.school_code} value={s.school_code}>{s.school_name}</option>)}
+                      <option value="OTHER">Other (Write-in)...</option>
                     </select>
                   </div>
                 </div>
+
+                {formValues.education.school_code === 'OTHER' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', backgroundColor: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                    <div className="form-group">
+                      <label className="form-label">Custom School Name *</label>
+                      <input type="text" value={formValues.education.customSchoolName || ''} onChange={e => handleFormChange('education', 'customSchoolName', e.target.value)} className="form-input" required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Custom School Address *</label>
+                      <input type="text" value={formValues.education.customSchoolAddress || ''} onChange={e => handleFormChange('education', 'customSchoolAddress', e.target.value)} className="form-input" required />
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
                   <div className="form-group">
                     <label className="form-label">Graduation Date (Optional)</label>
@@ -413,10 +443,24 @@ export default function EditModal({
                   <div className="form-group">
                     <label className="form-label">Employer/Agency Name</label>
                     <select value={formValues.employment.agency_code} onChange={e => handleFormChange('employment', 'agency_code', e.target.value)} className="form-select">
-                      {agencies.map(a => <option key={a.agency_code} value={a.agency_code}>{a.agency_name}</option>)}
+                      {agencies.filter(a => (a as any).is_registered !== false).map(a => <option key={a.agency_code} value={a.agency_code}>{a.agency_name}</option>)}
+                      <option value="OTHER">Other (Write-in)...</option>
                     </select>
                   </div>
                 </div>
+
+                {formValues.employment.agency_code === 'OTHER' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', backgroundColor: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                    <div className="form-group">
+                      <label className="form-label">Custom Agency Name *</label>
+                      <input type="text" value={formValues.employment.customAgencyName || ''} onChange={e => handleFormChange('employment', 'customAgencyName', e.target.value)} className="form-input" required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Custom Agency Address *</label>
+                      <input type="text" value={formValues.employment.customAgencyAddress || ''} onChange={e => handleFormChange('employment', 'customAgencyAddress', e.target.value)} className="form-input" required />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -424,27 +468,61 @@ export default function EditModal({
             {activeTab === 'disabilities' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Declared Disabilities</span>
-                <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  {disabilityLookups.filter(d => d.is_registered !== false).map(d => {
+                    const isChecked = formValues.disabilities.includes(d.disability_name);
+                    return (
+                      <label key={d.disability_code} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked} 
+                          onChange={(e) => handleDisabilityChange(d.disability_name, e.target.checked)} 
+                        />
+                        {d.disability_name}
+                      </label>
+                    );
+                  })}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={formValues.disabilities.visual} onChange={e => handleDisabilityChange('visual', e.target.checked)} />
-                    Visual Impairment
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={formValues.disabilities.hearing} onChange={e => handleDisabilityChange('hearing', e.target.checked)} />
-                    Hearing Impairment
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={formValues.disabilities.orthopedic} onChange={e => handleDisabilityChange('orthopedic', e.target.checked)} />
-                    Orthopedic
+                    <input 
+                      type="checkbox" 
+                      checked={showCustomDisability} 
+                      onChange={(e) => setShowCustomDisability(e.target.checked)} 
+                    />
+                    Other (Write-in)
                   </label>
                 </div>
+
+                {showCustomDisability && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <input 
+                      type="text" 
+                      placeholder="Specify other disability..." 
+                      value={customDisability} 
+                      onChange={e => setCustomDisability(e.target.value)} 
+                      className="form-input" 
+                      style={{ maxWidth: '320px', fontSize: '0.85rem' }} 
+                      required
+                    />
+                  </div>
+                )}
 
                 <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Government/Civil Eligibility Proofs</span>
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 2fr auto', gap: '0.5rem', alignItems: 'flex-end' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Exam/Title</span>
-                      <input type="text" placeholder="Let Exam" value={newProof.title} onChange={e => setNewProof(p => ({ ...p, title: e.target.value }))} className="form-input" style={{ padding: '0.4rem', fontSize: '0.8rem' }} />
+                      <select 
+                        value={newProof.title} 
+                        onChange={e => setNewProof(p => ({ ...p, title: e.target.value }))} 
+                        className="form-select" 
+                        style={{ padding: '0.4rem', fontSize: '0.8rem', height: '34px' }}
+                      >
+                        <option value="">-- Select --</option>
+                        {eligibilityLookups.filter(e => e.is_registered !== false).map(e => (
+                          <option key={e.eligibility_code} value={e.eligibility_name}>{e.eligibility_name}</option>
+                        ))}
+                        <option value="OTHER">Other (Write-in)...</option>
+                      </select>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Rating</span>
@@ -460,6 +538,21 @@ export default function EditModal({
                     </div>
                     <button type="button" onClick={addProof} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>Add</button>
                   </div>
+
+                  {newProof.title === 'OTHER' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.5rem 0.75rem', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginTop: '0.25rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Custom Eligibility Title *</span>
+                      <input 
+                        type="text" 
+                        placeholder="Type custom eligibility name" 
+                        value={newProof.customTitle || ''} 
+                        onChange={e => setNewProof(p => ({ ...p, customTitle: e.target.value }))} 
+                        className="form-input" 
+                        style={{ padding: '0.4rem', fontSize: '0.8rem' }} 
+                        required
+                      />
+                    </div>
+                  )}
 
                   {proofs.length > 0 && (
                     <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>

@@ -14,6 +14,8 @@ interface EducationFormProps {
     major: string;
     inclusive_years: string;
     school_code: string;
+    customSchoolName?: string;
+    customSchoolAddress?: string;
   };
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   schools: School[];
@@ -29,13 +31,27 @@ export default function EducationForm({ education, onChange, schools }: Educatio
       <div className="form-group">
         <label className="form-label">School / Institution *</label>
         <select name="school_code" value={education.school_code} onChange={onChange} className="form-select">
-          {schools.map(s => (
+          {schools.filter(s => (s as any).is_registered !== false).map(s => (
             <option key={s.school_code} value={s.school_code}>
               {s.school_name} ({s.school_address})
             </option>
           ))}
+          <option value="OTHER">Other (Write-in)...</option>
         </select>
       </div>
+
+      {education.school_code === 'OTHER' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', padding: '1rem', backgroundColor: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+          <div className="form-group">
+            <label className="form-label">Custom School Name *</label>
+            <input type="text" name="customSchoolName" value={education.customSchoolName || ''} onChange={onChange} className="form-input" placeholder="e.g. Saint Mary University" required />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Custom School Address *</label>
+            <input type="text" name="customSchoolAddress" value={education.customSchoolAddress || ''} onChange={onChange} className="form-input" placeholder="e.g. Bayombong, Nueva Vizcaya" required />
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
         <div className="form-group">

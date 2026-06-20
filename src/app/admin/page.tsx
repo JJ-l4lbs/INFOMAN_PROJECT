@@ -9,6 +9,8 @@ import ApplicationsTable from './components/ApplicationsTable';
 import DetailSidebar from './components/DetailSidebar';
 import CreateModal from './components/CreateModal';
 import EditModal from './components/EditModal';
+import LookupsTable from './components/LookupsTable';
+import LookupModal from './components/LookupModal';
 import Toast from '../components/Toast';
 
 export default function Admin() {
@@ -69,7 +71,32 @@ export default function Admin() {
     setToast,
     sortField,
     sortOrder,
-    handleSort
+    handleSort,
+    
+    // Lookups views
+    activeView,
+    setActiveView,
+    adminSchools,
+    adminAgencies,
+    adminDisabilities,
+    adminEligibilities,
+    loadingLookupsData,
+    handleApproveLookup,
+    handleDeleteLookup,
+    showLookupModal,
+    setShowLookupModal,
+    lookupModalConfig,
+    handleOpenLookupCreate,
+    handleOpenLookupEdit,
+    handleSaveLookup,
+    
+    // Dynamic lists & Custom inputs
+    disabilityLookups,
+    eligibilityLookups,
+    customDisability,
+    setCustomDisability,
+    showCustomDisability,
+    setShowCustomDisability
   } = useAdminDashboard();
 
   if (!isAuthenticated) {
@@ -87,7 +114,7 @@ export default function Admin() {
     <main style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1.5rem', animation: 'fadeIn 0.2s ease-out' }}>
       
       {/* Title Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontFamily: 'var(--font-accent)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Database size={28} style={{ color: 'var(--color-primary)' }} />
@@ -102,30 +129,85 @@ export default function Admin() {
         </button>
       </header>
 
-      {/* Main Layout Grid */}
+      {/* View Switcher Tabs */}
+      <nav style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid var(--color-border)', marginBottom: '1.5rem', overflowX: 'auto', paddingBottom: '1px' }}>
+        {(['applications', 'schools', 'agencies', 'disabilities', 'eligibilities'] as const).map(view => {
+          const isActive = activeView === view;
+          let displayLabel = '';
+          if (view === 'applications') displayLabel = 'Applications';
+          else if (view === 'schools') displayLabel = 'Registered Schools';
+          else if (view === 'agencies') displayLabel = 'Agencies';
+          else if (view === 'disabilities') displayLabel = 'Disabilities';
+          else if (view === 'eligibilities') displayLabel = 'Eligibilities';
+
+          return (
+            <button
+              key={view}
+              onClick={() => {
+                setActiveView(view);
+                setSelectedApp(null); // Close sidebar detail when switching views
+              }}
+              style={{
+                padding: '0.75rem 1.25rem',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                backgroundColor: isActive ? 'var(--bg-secondary)' : 'transparent',
+                color: isActive ? 'var(--color-primary)' : 'var(--text-muted)',
+                border: 'none',
+                borderBottom: isActive ? '3px solid var(--color-primary)' : '3px solid transparent',
+                cursor: 'pointer',
+                borderRadius: 'var(--radius-md) var(--radius-md) 0 0',
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {displayLabel}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Main Content Area */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
         
-        <ApplicationsTable
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          handleOpenCreateModal={handleOpenCreateModal}
-          loading={loading}
-          error={error}
-          fetchApplications={fetchApplications}
-          filteredApps={filteredApps}
-          selectedApp={selectedApp}
-          handleViewDetails={handleViewDetails}
-          handleDeleteApplicant={handleDeleteApplicant}
-          sortField={sortField}
-          sortOrder={sortOrder}
-          handleSort={handleSort}
-        />
+        {activeView === 'applications' ? (
+          <ApplicationsTable
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            handleOpenCreateModal={handleOpenCreateModal}
+            loading={loading}
+            error={error}
+            fetchApplications={fetchApplications}
+            filteredApps={filteredApps}
+            selectedApp={selectedApp}
+            handleViewDetails={handleViewDetails}
+            handleDeleteApplicant={handleDeleteApplicant}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            handleSort={handleSort}
+          />
+        ) : (
+          <LookupsTable
+            type={activeView}
+            data={
+              activeView === 'schools' ? adminSchools :
+              activeView === 'agencies' ? adminAgencies :
+              activeView === 'disabilities' ? adminDisabilities :
+              adminEligibilities
+            }
+            loading={loadingLookupsData}
+            onApprove={code => handleApproveLookup(activeView, code)}
+            onEdit={(code, item) => handleOpenLookupEdit(activeView, code, item)}
+            onDelete={code => handleDeleteLookup(activeView, code)}
+            onAdd={() => handleOpenLookupCreate(activeView)}
+          />
+        )}
 
       </div>
 
-      {selectedApp && !showEditModal && (
+      {selectedApp && !showEditModal && activeView === 'applications' && (
         <DetailSidebar
           selectedApp={selectedApp}
           setSelectedApp={setSelectedApp}
@@ -161,6 +243,12 @@ export default function Admin() {
           savingModal={savingModal}
           schools={schools}
           agencies={agencies}
+          disabilityLookups={disabilityLookups}
+          eligibilityLookups={eligibilityLookups}
+          customDisability={customDisability}
+          setCustomDisability={setCustomDisability}
+          showCustomDisability={showCustomDisability}
+          setShowCustomDisability={setShowCustomDisability}
         />
       )}
 
@@ -183,6 +271,21 @@ export default function Admin() {
           savingModal={savingModal}
           schools={schools}
           agencies={agencies}
+          disabilityLookups={disabilityLookups}
+          eligibilityLookups={eligibilityLookups}
+          customDisability={customDisability}
+          setCustomDisability={setCustomDisability}
+          showCustomDisability={showCustomDisability}
+          setShowCustomDisability={setShowCustomDisability}
+        />
+      )}
+
+      {showLookupModal && (
+        <LookupModal
+          onClose={() => setShowLookupModal(false)}
+          onSubmit={handleSaveLookup}
+          saving={savingModal}
+          config={lookupModalConfig}
         />
       )}
 

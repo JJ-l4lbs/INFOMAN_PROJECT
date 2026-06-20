@@ -174,23 +174,24 @@ export async function adminUpdateApplication(password: string, payload: {
     major: string;
     inclusive_years: string;
     school_code: string;
+    customSchoolName?: string;
+    customSchoolAddress?: string;
   };
   employment: {
     job_title: string;
     years_in_agency: number;
     appointment_status: string;
     agency_code: string;
+    customAgencyName?: string;
+    customAgencyAddress?: string;
   } | null;
-  disabilities: {
-    visual: boolean;
-    hearing: boolean;
-    orthopedic: boolean;
-  };
+  disabilities: string[];
   eligibilityProofs: Array<{
     title: string;
     rating: string;
     dateGranted: string;
     placeTaken: string;
+    isCustom?: boolean;
   }>;
 }) {
   checkAuth(password);
@@ -226,7 +227,22 @@ export async function adminUpdateApplication(password: string, payload: {
     throw new Error('Failed to update application details: No rows updated. This may be due to Row Level Security (RLS) restrictions (missing service role key) or an invalid reference number.');
   }
 
-  // 2. Update Education Record
+  // 2. Handle Custom School Insert if school_code === 'OTHER'
+  let targetSchoolCode = education.school_code;
+  if (education.school_code === 'OTHER') {
+    targetSchoolCode = `SCH-${generateAlphaNumericId(5)}`;
+    const { error: newSchoolErr } = await supabase
+      .from('schools')
+      .insert({
+        school_code: targetSchoolCode,
+        school_name: education.customSchoolName,
+        school_address: education.customSchoolAddress,
+        is_registered: false
+      });
+    if (newSchoolErr) throw new Error('Failed to register custom school: ' + newSchoolErr.message);
+  }
+
+  // Update Education Record
   const { data: eduData, error: eduErr } = await supabase
     .from('education_records')
     .update({
@@ -238,7 +254,7 @@ export async function adminUpdateApplication(password: string, payload: {
       program_title: education.program_title,
       major: education.major,
       inclusive_years: education.inclusive_years,
-      school_code: education.school_code
+      school_code: targetSchoolCode
     })
     .eq('educational_record_id', educational_record_id)
     .select();
@@ -251,6 +267,20 @@ export async function adminUpdateApplication(password: string, payload: {
   let finalEmpRecordId = employment_record_id;
 
   if (personal.employment_status === 'Employed' && employment) {
+    let targetAgencyCode = employment.agency_code;
+    if (employment.agency_code === 'OTHER') {
+      targetAgencyCode = `AGE-${generateAlphaNumericId(5)}`;
+      const { error: newAgencyErr } = await supabase
+        .from('agencies')
+        .insert({
+          agency_code: targetAgencyCode,
+          agency_name: employment.customAgencyName,
+          agency_address: employment.customAgencyAddress,
+          is_registered: false
+        });
+      if (newAgencyErr) throw new Error('Failed to register custom employment agency: ' + newAgencyErr.message);
+    }
+
     if (employment_record_id) {
       // Update existing
       const { data: empData, error: empErr } = await supabase
@@ -259,7 +289,7 @@ export async function adminUpdateApplication(password: string, payload: {
           job_title: employment.job_title,
           years_in_agency: employment.years_in_agency,
           appointment_status: employment.appointment_status,
-          agency_code: employment.agency_code
+          agency_code: targetAgencyCode
         })
         .eq('employment_record_id', employment_record_id)
         .select();
@@ -277,7 +307,7 @@ export async function adminUpdateApplication(password: string, payload: {
           job_title: employment.job_title,
           years_in_agency: employment.years_in_agency,
           appointment_status: employment.appointment_status,
-          agency_code: employment.agency_code
+          agency_code: targetAgencyCode
         });
       if (empErr) throw new Error('Failed to create employment details: ' + empErr.message);
       finalEmpRecordId = newEmpId;
@@ -285,7 +315,6 @@ export async function adminUpdateApplication(password: string, payload: {
   } else {
     // If not employed, delete old employment record if existed
     if (employment_record_id) {
-      // Need to set FK to null on applicant first, so we do it in step 4 then clean up
       finalEmpRecordId = null;
     }
   }
@@ -317,7 +346,6 @@ export async function adminUpdateApplication(password: string, payload: {
     throw new Error('Failed to update applicant details: No rows updated. This may be due to Row Level Security (RLS) restrictions or an invalid applicant ID.');
   }
 
-
   // Clean up orphan employment record if status changed from Employed to Unemployed
   if (personal.employment_status !== 'Employed' && employment_record_id) {
     const { error: cleanEmpErr } = await supabase
@@ -335,9 +363,27 @@ export async function adminUpdateApplication(password: string, payload: {
   if (delDisErr) throw new Error('Failed to clean up old disabilities: ' + delDisErr.message);
 
   const disabilityRecords = [];
-  if (disabilities.visual) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Visual Impairment', applicant_id: applicant_id });
-  if (disabilities.hearing) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Hearing Impairment', applicant_id: applicant_id });
-  if (disabilities.orthopedic) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Orthopedic', applicant_id: applicant_id });
+  for (const disName of disabilities) {
+    const { data: existingDis } = await supabase
+      .from('disability_lookups')
+      .select('disability_code')
+      .eq('disability_name', disName);
+
+    if (!existingDis || existingDis.length === 0) {
+      const customCode = `DIS-${generateAlphaNumericId(5)}`;
+      await supabase.from('disability_lookups').insert({
+        disability_code: customCode,
+        disability_name: disName,
+        is_registered: false
+      });
+    }
+
+    disabilityRecords.push({ 
+      disability_id: `DIS-${generateNumericId(5)}`, 
+      disability: disName, 
+      applicant_id: applicant_id 
+    });
+  }
 
   if (disabilityRecords.length > 0) {
     const { error: insDisErr } = await supabase
@@ -354,6 +400,24 @@ export async function adminUpdateApplication(password: string, payload: {
   if (delEligErr) throw new Error('Failed to clean up old eligibility proofs: ' + delEligErr.message);
 
   if (eligibilityProofs.length > 0) {
+    for (const proof of eligibilityProofs) {
+      if (proof.isCustom) {
+        const { data: existingElg } = await supabase
+          .from('eligibility_lookups')
+          .select('eligibility_code')
+          .eq('eligibility_name', proof.title);
+
+        if (!existingElg || existingElg.length === 0) {
+          const customCode = `ELG-${generateAlphaNumericId(5)}`;
+          await supabase.from('eligibility_lookups').insert({
+            eligibility_code: customCode,
+            eligibility_name: proof.title,
+            is_registered: false
+          });
+        }
+      }
+    }
+
     const proofRecords = eligibilityProofs.map(proof => ({
       eligibility_proof_id: `ELIG-${generateNumericId(5)}`,
       eligibility_proof_title: proof.title,
@@ -449,23 +513,24 @@ export async function adminAddApplication(password: string, payload: {
     major: string;
     inclusive_years: string;
     school_code: string;
+    customSchoolName?: string;
+    customSchoolAddress?: string;
   };
   employment: {
     job_title: string;
     years_in_agency: number;
     appointment_status: string;
     agency_code: string;
+    customAgencyName?: string;
+    customAgencyAddress?: string;
   } | null;
-  disabilities: {
-    visual: boolean;
-    hearing: boolean;
-    orthopedic: boolean;
-  };
+  disabilities: string[];
   eligibilityProofs: Array<{
     title: string;
     rating: string;
     dateGranted: string;
     placeTaken: string;
+    isCustom?: boolean;
   }>;
 }) {
   checkAuth(password);
@@ -514,7 +579,21 @@ export async function adminAddApplication(password: string, payload: {
   const applicantId = `APP-${generateAlphaNumericId(8)}`;
   const applicationNo = `APPNO-${generateNumericId(5)}`;
 
-  // Step A: Insert Education
+  // Step A: Insert Education (Handle custom school write-in)
+  let targetSchoolCode = education.school_code;
+  if (education.school_code === 'OTHER') {
+    targetSchoolCode = `SCH-${generateAlphaNumericId(5)}`;
+    const { error: newSchoolErr } = await supabase
+      .from('schools')
+      .insert({
+        school_code: targetSchoolCode,
+        school_name: education.customSchoolName,
+        school_address: education.customSchoolAddress,
+        is_registered: false
+      });
+    if (newSchoolErr) throw new Error('Failed to register custom school: ' + newSchoolErr.message);
+  }
+
   const { error: eduErr } = await supabase
     .from('education_records')
     .insert({
@@ -527,12 +606,26 @@ export async function adminAddApplication(password: string, payload: {
       program_title: education.program_title,
       major: education.major,
       inclusive_years: education.inclusive_years,
-      school_code: education.school_code
+      school_code: targetSchoolCode
     });
   if (eduErr) throw new Error('Failed to create education record: ' + eduErr.message);
 
-  // Step B: Insert Employment
+  // Step B: Insert Employment (Handle custom agency write-in)
   if (personal.employment_status === 'Employed' && empRecordId && employment) {
+    let targetAgencyCode = employment.agency_code;
+    if (employment.agency_code === 'OTHER') {
+      targetAgencyCode = `AGE-${generateAlphaNumericId(5)}`;
+      const { error: newAgencyErr } = await supabase
+        .from('agencies')
+        .insert({
+          agency_code: targetAgencyCode,
+          agency_name: employment.customAgencyName,
+          agency_address: employment.customAgencyAddress,
+          is_registered: false
+        });
+      if (newAgencyErr) throw new Error('Failed to register custom employment agency: ' + newAgencyErr.message);
+    }
+
     const { error: empErr } = await supabase
       .from('employment_records')
       .insert({
@@ -540,7 +633,7 @@ export async function adminAddApplication(password: string, payload: {
         job_title: employment.job_title,
         years_in_agency: employment.years_in_agency,
         appointment_status: employment.appointment_status,
-        agency_code: employment.agency_code
+        agency_code: targetAgencyCode
       });
     if (empErr) throw new Error('Failed to create employment record: ' + empErr.message);
   }
@@ -585,19 +678,55 @@ export async function adminAddApplication(password: string, payload: {
     });
   if (appErr) throw new Error('Failed to create application entry: ' + appErr.message);
 
-  // Step E: Insert Disabilities
+  // Step E: Insert Disabilities (Handle custom disability write-ins)
   const disabilityRecords = [];
-  if (disabilities.visual) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Visual Impairment', applicant_id: applicantId });
-  if (disabilities.hearing) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Hearing Impairment', applicant_id: applicantId });
-  if (disabilities.orthopedic) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Orthopedic', applicant_id: applicantId });
+  for (const disName of disabilities) {
+    const { data: existingDis } = await supabase
+      .from('disability_lookups')
+      .select('disability_code')
+      .eq('disability_name', disName);
+
+    if (!existingDis || existingDis.length === 0) {
+      const customCode = `DIS-${generateAlphaNumericId(5)}`;
+      await supabase.from('disability_lookups').insert({
+        disability_code: customCode,
+        disability_name: disName,
+        is_registered: false
+      });
+    }
+
+    disabilityRecords.push({ 
+      disability_id: `DIS-${generateNumericId(5)}`, 
+      disability: disName, 
+      applicant_id: applicantId 
+    });
+  }
 
   if (disabilityRecords.length > 0) {
     const { error: disErr } = await supabase.from('disabilities').insert(disabilityRecords);
     if (disErr) throw new Error('Failed to record disabilities: ' + disErr.message);
   }
 
-  // Step F: Insert Eligibility Proofs
+  // Step F: Insert Eligibility Proofs (Handle custom eligibility write-ins)
   if (eligibilityProofs.length > 0) {
+    for (const proof of eligibilityProofs) {
+      if (proof.isCustom) {
+        const { data: existingElg } = await supabase
+          .from('eligibility_lookups')
+          .select('eligibility_code')
+          .eq('eligibility_name', proof.title);
+
+        if (!existingElg || existingElg.length === 0) {
+          const customCode = `ELG-${generateAlphaNumericId(5)}`;
+          await supabase.from('eligibility_lookups').insert({
+            eligibility_code: customCode,
+            eligibility_name: proof.title,
+            is_registered: false
+          });
+        }
+      }
+    }
+
     const proofRecords = eligibilityProofs.map(proof => ({
       eligibility_proof_id: `ELIG-${generateNumericId(5)}`,
       eligibility_proof_title: proof.title,
@@ -612,4 +741,250 @@ export async function adminAddApplication(password: string, payload: {
   }
 
   return { success: true, applicantId, applicationNo };
+}
+
+/**
+ * Fetch lookup table records (schools, agencies, disability_lookups, eligibility_lookups)
+ */
+export async function adminFetchLookups(password: string, type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities') {
+  checkAuth(password);
+  const supabase = getServiceClient();
+
+  let table = '';
+  if (type === 'schools') table = 'schools';
+  else if (type === 'agencies') table = 'agencies';
+  else if (type === 'disabilities') table = 'disability_lookups';
+  else if (type === 'eligibilities') table = 'eligibility_lookups';
+
+  const { data, error } = await supabase
+    .from(table)
+    .select('*');
+
+  if (error) {
+    console.error(`Failed to fetch lookups from ${table}:`, error);
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+/**
+ * Approve an unregistered lookup entry (set is_registered to true)
+ */
+export async function adminApproveLookup(
+  password: string, 
+  type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', 
+  code: string
+) {
+  checkAuth(password);
+  const supabase = getServiceClient();
+
+  let table = '';
+  let idCol = '';
+  if (type === 'schools') {
+    table = 'schools';
+    idCol = 'school_code';
+  } else if (type === 'agencies') {
+    table = 'agencies';
+    idCol = 'agency_code';
+  } else if (type === 'disabilities') {
+    table = 'disability_lookups';
+    idCol = 'disability_code';
+  } else if (type === 'eligibilities') {
+    table = 'eligibility_lookups';
+    idCol = 'eligibility_code';
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .update({ is_registered: true })
+    .eq(idCol, code)
+    .select();
+
+  if (error) {
+    console.error(`Failed to approve lookup in ${table}:`, error);
+    throw new Error(error.message);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(`Record with code ${code} not found or RLS mismatch.`);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Update a lookup record
+ */
+export async function adminUpdateLookup(
+  password: string, 
+  type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', 
+  code: string, 
+  payload: any
+) {
+  checkAuth(password);
+  const supabase = getServiceClient();
+
+  let table = '';
+  let idCol = '';
+  const updateData: any = {};
+
+  if (type === 'schools') {
+    table = 'schools';
+    idCol = 'school_code';
+    updateData.school_name = payload.school_name;
+    updateData.school_address = payload.school_address;
+    if (payload.is_registered !== undefined) updateData.is_registered = payload.is_registered;
+  } else if (type === 'agencies') {
+    table = 'agencies';
+    idCol = 'agency_code';
+    updateData.agency_name = payload.agency_name;
+    updateData.agency_address = payload.agency_address;
+    if (payload.is_registered !== undefined) updateData.is_registered = payload.is_registered;
+  } else if (type === 'disabilities') {
+    table = 'disability_lookups';
+    idCol = 'disability_code';
+    updateData.disability_name = payload.disability_name;
+    if (payload.is_registered !== undefined) updateData.is_registered = payload.is_registered;
+  } else if (type === 'eligibilities') {
+    table = 'eligibility_lookups';
+    idCol = 'eligibility_code';
+    updateData.eligibility_name = payload.eligibility_name;
+    if (payload.is_registered !== undefined) updateData.is_registered = payload.is_registered;
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .update(updateData)
+    .eq(idCol, code)
+    .select();
+
+  if (error) {
+    console.error(`Failed to update lookup in ${table}:`, error);
+    throw new Error(error.message);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(`Record with code ${code} not found or RLS mismatch.`);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete a lookup record
+ */
+export async function adminDeleteLookup(
+  password: string, 
+  type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', 
+  code: string
+) {
+  checkAuth(password);
+  const supabase = getServiceClient();
+
+  let table = '';
+  let idCol = '';
+  if (type === 'schools') {
+    table = 'schools';
+    idCol = 'school_code';
+  } else if (type === 'agencies') {
+    table = 'agencies';
+    idCol = 'agency_code';
+  } else if (type === 'disabilities') {
+    table = 'disability_lookups';
+    idCol = 'disability_code';
+  } else if (type === 'eligibilities') {
+    table = 'eligibility_lookups';
+    idCol = 'eligibility_code';
+  }
+
+  // Reference checks before deletion
+  if (type === 'schools') {
+    const { count, error: countErr } = await supabase
+      .from('education_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('school_code', code);
+    if (countErr) throw new Error(countErr.message);
+    if (count && count > 0) {
+      throw new Error(`Cannot delete this school: It is currently referenced by ${count} education records. Please re-assign those records first.`);
+    }
+  } else if (type === 'agencies') {
+    const { count, error: countErr } = await supabase
+      .from('employment_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('agency_code', code);
+    if (countErr) throw new Error(countErr.message);
+    if (count && count > 0) {
+      throw new Error(`Cannot delete this agency: It is currently referenced by ${count} employment records. Please re-assign those records first.`);
+    }
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .delete()
+    .eq(idCol, code)
+    .select();
+
+  if (error) {
+    console.error(`Failed to delete lookup from ${table}:`, error);
+    throw new Error(error.message);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(`Record with code ${code} not found or RLS mismatch.`);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Add a new lookup record (admin creates a standard one)
+ */
+export async function adminAddLookup(
+  password: string, 
+  type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', 
+  payload: any
+) {
+  checkAuth(password);
+  const supabase = getServiceClient();
+
+  let table = '';
+  const insertData: any = {};
+
+  if (type === 'schools') {
+    table = 'schools';
+    insertData.school_code = `SCH-${generateAlphaNumericId(5)}`;
+    insertData.school_name = payload.school_name;
+    insertData.school_address = payload.school_address;
+    insertData.is_registered = true;
+  } else if (type === 'agencies') {
+    table = 'agencies';
+    insertData.agency_code = `AGE-${generateAlphaNumericId(5)}`;
+    insertData.agency_name = payload.agency_name;
+    insertData.agency_address = payload.agency_address;
+    insertData.is_registered = true;
+  } else if (type === 'disabilities') {
+    table = 'disability_lookups';
+    insertData.disability_code = `DIS-${generateAlphaNumericId(5)}`;
+    insertData.disability_name = payload.disability_name;
+    insertData.is_registered = true;
+  } else if (type === 'eligibilities') {
+    table = 'eligibility_lookups';
+    insertData.eligibility_code = `ELG-${generateAlphaNumericId(5)}`;
+    insertData.eligibility_name = payload.eligibility_name;
+    insertData.is_registered = true;
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .insert(insertData)
+    .select();
+
+  if (error) {
+    console.error(`Failed to add lookup to ${table}:`, error);
+    throw new Error(error.message);
+  }
+
+  const generatedCode = data[0].school_code || data[0].agency_code || data[0].disability_code || data[0].eligibility_code;
+  return { success: true, code: generatedCode };
 }

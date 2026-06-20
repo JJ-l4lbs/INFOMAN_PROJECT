@@ -17,18 +17,18 @@ interface ReviewStepProps {
     major: string;
     inclusive_years: string;
     school_code: string;
+    customSchoolName?: string;
+    customSchoolAddress?: string;
   };
   employment: {
     job_title: string;
     years_in_agency: number;
     appointment_status: string;
     agency_code: string;
+    customAgencyName?: string;
+    customAgencyAddress?: string;
   };
-  disabilities: {
-    visual: boolean;
-    hearing: boolean;
-    orthopedic: boolean;
-  };
+  disabilities: string[];
   eligibilityProofs: Array<{
     title: string;
   }>;
@@ -68,7 +68,9 @@ export default function ReviewStep({
           <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Highest Degree:</strong> {education.highest_education}</p>
           <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Program:</strong> {education.program_title} ({education.major})</p>
           <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Inclusive Years:</strong> {education.inclusive_years}</p>
-          <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>School Code:</strong> {education.school_code}</p>
+          <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}>
+            <strong>School:</strong> {education.school_code === 'OTHER' ? `${education.customSchoolName} (Write-in)` : education.school_code}
+          </p>
         </div>
 
         {/* Employment Summary */}
@@ -78,7 +80,9 @@ export default function ReviewStep({
             <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Title:</strong> {employment.job_title}</p>
             <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Years in Agency:</strong> {employment.years_in_agency}</p>
             <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Appointment:</strong> {employment.appointment_status}</p>
-            <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Agency Code:</strong> {employment.agency_code}</p>
+            <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}>
+              <strong>Agency:</strong> {employment.agency_code === 'OTHER' ? `${employment.customAgencyName} (Write-in)` : employment.agency_code}
+            </p>
           </div>
         )}
 
@@ -86,11 +90,7 @@ export default function ReviewStep({
         <div className="card" style={{ padding: '1.25rem', backgroundColor: 'var(--bg-primary)' }}>
           <h4 style={{ fontSize: '0.95rem', marginBottom: '0.75rem', color: 'var(--color-primary)' }}>Disabilities & Proofs</h4>
           <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Disabilities:</strong> {
-            [
-              disabilities.visual && 'Visual',
-              disabilities.hearing && 'Hearing',
-              disabilities.orthopedic && 'Orthopedic'
-            ].filter(Boolean).join(', ') || 'None declared'
+            disabilities.join(', ') || 'None declared'
           }</p>
           <p style={{ fontSize: '0.9rem', margin: '0.25rem 0' }}><strong>Eligibility Proofs:</strong> {eligibilityProofs.length} record(s) added</p>
         </div>

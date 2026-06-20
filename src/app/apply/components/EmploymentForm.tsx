@@ -9,6 +9,8 @@ interface EmploymentFormProps {
     years_in_agency: number;
     appointment_status: string;
     agency_code: string;
+    customAgencyName?: string;
+    customAgencyAddress?: string;
   };
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   agencies: Agency[];
@@ -24,13 +26,27 @@ export default function EmploymentForm({ employment, onChange, agencies }: Emplo
       <div className="form-group">
         <label className="form-label">Employer / Agency *</label>
         <select name="agency_code" value={employment.agency_code} onChange={onChange} className="form-select">
-          {agencies.map(a => (
+          {agencies.filter(a => (a as any).is_registered !== false).map(a => (
             <option key={a.agency_code} value={a.agency_code}>
               {a.agency_name} ({a.agency_address})
             </option>
           ))}
+          <option value="OTHER">Other (Write-in)...</option>
         </select>
       </div>
+
+      {employment.agency_code === 'OTHER' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', padding: '1rem', backgroundColor: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+          <div className="form-group">
+            <label className="form-label">Custom Agency Name *</label>
+            <input type="text" name="customAgencyName" value={employment.customAgencyName || ''} onChange={onChange} className="form-input" placeholder="e.g. Department of Health" required />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Custom Agency Address *</label>
+            <input type="text" name="customAgencyAddress" value={employment.customAgencyAddress || ''} onChange={onChange} className="form-input" placeholder="e.g. NCR, Manila" required />
+          </div>
+        </div>
+      )}
 
       <div className="form-group">
         <label className="form-label">Job Title / Designation *</label>

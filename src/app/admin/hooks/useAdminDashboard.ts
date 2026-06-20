@@ -8,7 +8,12 @@ import {
   adminFetchApplicationDetail, 
   adminUpdateApplication, 
   adminDeleteApplicant, 
-  adminAddApplication 
+  adminAddApplication,
+  adminFetchLookups,
+  adminApproveLookup,
+  adminUpdateLookup,
+  adminDeleteLookup,
+  adminAddLookup
 } from '../actions';
 
 interface JoinResult extends Application {
@@ -37,7 +42,17 @@ export function useAdminDashboard() {
   // Lookup data for dropdowns
   const [schools, setSchools] = useState<School[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [disabilityLookups, setDisabilityLookups] = useState<any[]>([]);
+  const [eligibilityLookups, setEligibilityLookups] = useState<any[]>([]);
   const [loadingLookups, setLoadingLookups] = useState(false);
+
+  // Lookup management views
+  const [activeView, setActiveView] = useState<'applications' | 'schools' | 'agencies' | 'disabilities' | 'eligibilities'>('applications');
+  const [adminSchools, setAdminSchools] = useState<any[]>([]);
+  const [adminAgencies, setAdminAgencies] = useState<any[]>([]);
+  const [adminDisabilities, setAdminDisabilities] = useState<any[]>([]);
+  const [adminEligibilities, setAdminEligibilities] = useState<any[]>([]);
+  const [loadingLookupsData, setLoadingLookupsData] = useState(false);
 
   // Filters and Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,24 +127,26 @@ export function useAdminDashboard() {
       program_title: '',
       major: '',
       inclusive_years: '',
-      school_code: ''
+      school_code: '',
+      customSchoolName: '',
+      customSchoolAddress: ''
     },
     employment: {
       job_title: '',
       years_in_agency: 0,
       appointment_status: 'Permanent',
-      agency_code: ''
+      agency_code: '',
+      customAgencyName: '',
+      customAgencyAddress: ''
     },
-    disabilities: {
-      visual: false,
-      hearing: false,
-      orthopedic: false
-    }
+    disabilities: [] as string[]
   };
 
   const [formValues, setFormValues] = useState(initialFormState);
-  const [proofs, setProofs] = useState<Array<{ title: string; rating: string; dateGranted: string; placeTaken: string }>>([]);
-  const [newProof, setNewProof] = useState({ title: '', rating: '', dateGranted: '', placeTaken: '' });
+  const [customDisability, setCustomDisability] = useState('');
+  const [showCustomDisability, setShowCustomDisability] = useState(false);
+  const [proofs, setProofs] = useState<Array<{ title: string; rating: string; dateGranted: string; placeTaken: string; isCustom?: boolean }>>([]);
+  const [newProof, setNewProof] = useState({ title: '', customTitle: '', rating: '', dateGranted: '', placeTaken: '' });
   const [actionError, setActionError] = useState<string | null>(null);
   const [savingModal, setSavingModal] = useState(false);
 
@@ -181,18 +198,27 @@ export function useAdminDashboard() {
     }
   };
 
+
   // --- FETCH LOOKUPS ---
   const fetchLookups = async () => {
     try {
       setLoadingLookups(true);
       const { data: schoolsData } = await supabase.from('schools').select('*');
       const { data: agenciesData } = await supabase.from('agencies').select('*');
+      const { data: disData } = await supabase.from('disability_lookups').select('*');
+      const { data: elgData } = await supabase.from('eligibility_lookups').select('*');
       
       if (schoolsData && schoolsData.length > 0) {
         setSchools(schoolsData as School[]);
       }
       if (agenciesData && agenciesData.length > 0) {
         setAgencies(agenciesData as Agency[]);
+      }
+      if (disData) {
+        setDisabilityLookups(disData);
+      }
+      if (elgData) {
+        setEligibilityLookups(elgData);
       }
     } catch (err) {
       console.error('Failed to query lookup tables', err);
@@ -201,10 +227,32 @@ export function useAdminDashboard() {
     }
   };
 
+  // --- FETCH ALL ADMIN LOOKUPS ---
+  const fetchAllAdminLookups = async () => {
+    try {
+      setLoadingLookupsData(true);
+      const sch = await adminFetchLookups(password, 'schools');
+      const age = await adminFetchLookups(password, 'agencies');
+      const dis = await adminFetchLookups(password, 'disabilities');
+      const elg = await adminFetchLookups(password, 'eligibilities');
+      
+      setAdminSchools(sch);
+      setAdminAgencies(age);
+      setAdminDisabilities(dis);
+      setAdminEligibilities(elg);
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Failed to load lookup data.', 'error');
+    } finally {
+      setLoadingLookupsData(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchApplications();
       fetchLookups();
+      fetchAllAdminLookups();
     }
   }, [isAuthenticated]);
 
@@ -285,11 +333,7 @@ export function useAdminDashboard() {
           appointment_status: detailedData.employment.appointment_status,
           agency_code: detailedData.employment.agency_code
         } : null,
-        disabilities: {
-          visual: detailedData.disabilities.some(d => d.disability === 'Visual Impairment'),
-          hearing: detailedData.disabilities.some(d => d.disability === 'Hearing Impairment'),
-          orthopedic: detailedData.disabilities.some(d => d.disability === 'Orthopedic')
-        },
+        disabilities: detailedData.disabilities.map(d => d.disability),
         eligibilityProofs: detailedData.eligibilityProofs.map(p => ({
           title: p.eligibility_proof_title,
           rating: p.rating_obtained,
@@ -385,19 +429,19 @@ export function useAdminDashboard() {
         program_title: detailedData.education?.program_title || '',
         major: detailedData.education?.major || '',
         inclusive_years: detailedData.education?.inclusive_years || '',
-        school_code: detailedData.education?.school_code || (schools[0]?.school_code || '')
+        school_code: detailedData.education?.school_code || (schools[0]?.school_code || ''),
+        customSchoolName: '',
+        customSchoolAddress: ''
       },
       employment: {
         job_title: detailedData.employment?.job_title || '',
         years_in_agency: detailedData.employment?.years_in_agency || 0,
         appointment_status: detailedData.employment?.appointment_status || 'Permanent',
-        agency_code: detailedData.employment?.agency_code || (agencies[0]?.agency_code || '')
+        agency_code: detailedData.employment?.agency_code || (agencies[0]?.agency_code || ''),
+        customAgencyName: '',
+        customAgencyAddress: ''
       },
-      disabilities: {
-        visual: detailedData.disabilities.some(d => d.disability === 'Visual Impairment'),
-        hearing: detailedData.disabilities.some(d => d.disability === 'Hearing Impairment'),
-        orthopedic: detailedData.disabilities.some(d => d.disability === 'Orthopedic')
-      }
+      disabilities: detailedData.disabilities.map(d => d.disability)
     });
 
     setProofs(detailedData.eligibilityProofs.map(p => ({
@@ -439,24 +483,34 @@ export function useAdminDashboard() {
     }));
   };
 
-  const handleDisabilityChange = (field: 'visual' | 'hearing' | 'orthopedic', checked: boolean) => {
-    setFormValues(prev => ({
-      ...prev,
-      disabilities: {
-        ...prev.disabilities,
-        [field]: checked
-      }
-    }));
+  const handleDisabilityChange = (name: string, checked: boolean) => {
+    setFormValues(prev => {
+      const current = prev.disabilities || [];
+      const next = checked
+        ? [...current.filter(item => item !== name), name]
+        : current.filter(item => item !== name);
+      return {
+        ...prev,
+        disabilities: next as any
+      };
+    });
   };
 
   // Proofs editors
   const addProof = () => {
-    if (!newProof.title || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
+    const actualTitle = newProof.title === 'OTHER' ? newProof.customTitle : newProof.title;
+    if (!actualTitle || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
       showToast('Please fill in all eligibility proof fields.', 'error');
       return;
     }
-    setProofs(prev => [...prev, newProof]);
-    setNewProof({ title: '', rating: '', dateGranted: '', placeTaken: '' });
+    setProofs(prev => [...prev, {
+      title: actualTitle,
+      rating: newProof.rating,
+      dateGranted: newProof.dateGranted,
+      placeTaken: newProof.placeTaken,
+      isCustom: newProof.title === 'OTHER'
+    }]);
+    setNewProof({ title: '', customTitle: '', rating: '', dateGranted: '', placeTaken: '' });
   };
 
   const removeProof = (idx: number) => {
@@ -503,21 +557,95 @@ export function useAdminDashboard() {
     setActionError(null);
 
     try {
+      const finalDisabilities = [...formValues.disabilities];
+      if (showCustomDisability && customDisability.trim() !== '') {
+        finalDisabilities.push(customDisability.trim());
+      }
+
       const res = await adminAddApplication(password, {
         application: formValues.application,
         personal: formValues.personal,
         education: formValues.education,
         employment: formValues.personal.employment_status === 'Employed' ? formValues.employment : null,
-        disabilities: formValues.disabilities,
+        disabilities: finalDisabilities,
         eligibilityProofs: proofs
       });
 
       showToast(`Application added successfully!\nApplicant ID: ${res.applicantId}\nApplication No: ${res.applicationNo}`, 'success');
       setShowCreateModal(false);
+      setCustomDisability('');
+      setShowCustomDisability(false);
       await fetchApplications();
+      await fetchLookups();
+      await fetchAllAdminLookups();
     } catch (err: any) {
       setActionError(err.message || 'Failed to create manual entry.');
       showToast(err.message || 'Failed to create manual entry.', 'error');
+    } finally {
+      setSavingModal(false);
+    }
+  };
+
+  // --- LOOKUP MANAGEMENT ACTIONS ---
+  const handleApproveLookup = async (type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', code: string) => {
+    try {
+      await adminApproveLookup(password, type, code);
+      showToast('Lookup approved successfully!', 'success');
+      await fetchAllAdminLookups();
+      await fetchLookups();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to approve lookup.', 'error');
+    }
+  };
+
+  const handleDeleteLookup = async (type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', code: string) => {
+    if (!confirm('Are you sure you want to delete this lookup record? This cannot be undone.')) return;
+    try {
+      await adminDeleteLookup(password, type, code);
+      showToast('Lookup deleted successfully!', 'success');
+      await fetchAllAdminLookups();
+      await fetchLookups();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete lookup.', 'error');
+    }
+  };
+
+  const [showLookupModal, setShowLookupModal] = useState(false);
+  const [lookupModalConfig, setLookupModalConfig] = useState<{
+    mode: 'create' | 'edit';
+    type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities';
+    code?: string;
+    initialData?: any;
+  } | null>(null);
+
+  const handleOpenLookupCreate = (type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities') => {
+    setLookupModalConfig({ mode: 'create', type });
+    setShowLookupModal(true);
+  };
+
+  const handleOpenLookupEdit = (type: 'schools' | 'agencies' | 'disabilities' | 'eligibilities', code: string, currentData: any) => {
+    setLookupModalConfig({ mode: 'edit', type, code, initialData: currentData });
+    setShowLookupModal(true);
+  };
+
+  const handleSaveLookup = async (payload: any) => {
+    if (!lookupModalConfig) return;
+    setSavingModal(true);
+    try {
+      const { mode, type, code } = lookupModalConfig;
+      if (mode === 'create') {
+        await adminAddLookup(password, type, payload);
+        showToast('Lookup record added!', 'success');
+      } else if (mode === 'edit' && code) {
+        await adminUpdateLookup(password, type, code, payload);
+        showToast('Lookup record updated!', 'success');
+      }
+      setShowLookupModal(false);
+      await fetchAllAdminLookups();
+      await fetchLookups();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save lookup record.', 'error');
+      throw err;
     } finally {
       setSavingModal(false);
     }
@@ -632,6 +760,28 @@ export function useAdminDashboard() {
     showToast,
     sortField,
     sortOrder,
-    handleSort
+    handleSort,
+    activeView,
+    setActiveView,
+    adminSchools,
+    adminAgencies,
+    adminDisabilities,
+    adminEligibilities,
+    loadingLookupsData,
+    fetchAllAdminLookups,
+    handleApproveLookup,
+    handleDeleteLookup,
+    showLookupModal,
+    setShowLookupModal,
+    lookupModalConfig,
+    handleOpenLookupCreate,
+    handleOpenLookupEdit,
+    handleSaveLookup,
+    customDisability,
+    setCustomDisability,
+    showCustomDisability,
+    setShowCustomDisability,
+    disabilityLookups,
+    eligibilityLookups
   };
 }

@@ -29,6 +29,12 @@ export default function Apply() {
     employment,
     disabilities,
     setDisabilities,
+    customDisability,
+    setCustomDisability,
+    showCustomDisability,
+    setShowCustomDisability,
+    disabilityLookups,
+    eligibilityLookups,
     eligibilityProofs,
     newProof,
     setNewProof,
@@ -144,6 +150,12 @@ export default function Apply() {
               <DisabilitiesForm
                 disabilities={disabilities}
                 setDisabilities={setDisabilities}
+                customDisability={customDisability}
+                setCustomDisability={setCustomDisability}
+                showCustomDisability={showCustomDisability}
+                setShowCustomDisability={setShowCustomDisability}
+                disabilityLookups={disabilityLookups}
+                eligibilityLookups={eligibilityLookups}
                 eligibilityProofs={eligibilityProofs}
                 newProof={newProof}
                 setNewProof={setNewProof}

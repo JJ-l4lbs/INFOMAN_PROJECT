@@ -22,6 +22,8 @@ export function useApplyForm() {
   const [step, setStep] = useState(1);
   const [schools, setSchools] = useState<School[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [disabilityLookups, setDisabilityLookups] = useState<any[]>([]);
+  const [eligibilityLookups, setEligibilityLookups] = useState<any[]>([]);
   const [loadingLookups, setLoadingLookups] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -66,37 +68,41 @@ export function useApplyForm() {
     program_title: '',
     major: '',
     inclusive_years: '',
-    school_code: ''
+    school_code: '',
+    customSchoolName: '',
+    customSchoolAddress: ''
   });
 
   const [employment, setEmployment] = useState({
     job_title: '',
     years_in_agency: 0,
     appointment_status: 'Permanent',
-    agency_code: ''
+    agency_code: '',
+    customAgencyName: '',
+    customAgencyAddress: ''
   });
 
-  const [disabilities, setDisabilities] = useState({
-    visual: false,
-    hearing: false,
-    orthopedic: false
-  });
+  const [disabilities, setDisabilities] = useState<string[]>([]);
+  const [customDisability, setCustomDisability] = useState('');
+  const [showCustomDisability, setShowCustomDisability] = useState(false);
 
   const [eligibilityProofs, setEligibilityProofs] = useState<Array<{
     title: string;
     rating: string;
     dateGranted: string;
     placeTaken: string;
+    isCustom?: boolean;
   }>>([]);
 
   const [newProof, setNewProof] = useState({
     title: '',
+    customTitle: '',
     rating: '',
     dateGranted: '',
     placeTaken: ''
   });
 
-  // --- FETCH SCHOOLS & AGENCIES ON MOUNT ---
+  // --- FETCH LOOKUPS ON MOUNT ---
   useEffect(() => {
     async function fetchLookups() {
       try {
@@ -106,6 +112,12 @@ export function useApplyForm() {
           .select('*');
         const { data: agenciesData, error: agenciesErr } = await supabase
           .from('agencies')
+          .select('*');
+        const { data: disData, error: disErr } = await supabase
+          .from('disability_lookups')
+          .select('*');
+        const { data: elgData, error: elgErr } = await supabase
+          .from('eligibility_lookups')
           .select('*');
 
         if (!schoolsErr && schoolsData && schoolsData.length > 0) {
@@ -122,6 +134,13 @@ export function useApplyForm() {
         } else {
           setAgencies(FALLBACK_AGENCIES);
           setEmployment(prev => ({ ...prev, agency_code: FALLBACK_AGENCIES[0].agency_code }));
+        }
+
+        if (!disErr && disData) {
+          setDisabilityLookups(disData);
+        }
+        if (!elgErr && elgData) {
+          setEligibilityLookups(elgData);
         }
       } catch (err) {
         console.error('Failed to query lookup tables, applying fallback data', err);
@@ -170,12 +189,19 @@ export function useApplyForm() {
   };
 
   const addEligibilityProof = () => {
-    if (!newProof.title || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
+    const actualTitle = newProof.title === 'OTHER' ? newProof.customTitle : newProof.title;
+    if (!actualTitle || !newProof.rating || !newProof.dateGranted || !newProof.placeTaken) {
       showToast('Please fill out all fields for eligibility proof.', 'error');
       return;
     }
-    setEligibilityProofs(prev => [...prev, newProof]);
-    setNewProof({ title: '', rating: '', dateGranted: '', placeTaken: '' });
+    setEligibilityProofs(prev => [...prev, {
+      title: actualTitle,
+      rating: newProof.rating,
+      dateGranted: newProof.dateGranted,
+      placeTaken: newProof.placeTaken,
+      isCustom: newProof.title === 'OTHER'
+    }]);
+    setNewProof({ title: '', customTitle: '', rating: '', dateGranted: '', placeTaken: '' });
   };
 
   const removeEligibilityProof = (index: number) => {
@@ -198,18 +224,24 @@ export function useApplyForm() {
       );
     }
     if (step === 2) {
+      const isSchoolFilled = education.school_code === 'OTHER'
+        ? (education.customSchoolName && education.customSchoolAddress)
+        : education.school_code;
       return (
         education.program_title &&
         education.major &&
         education.inclusive_years &&
-        education.school_code
+        isSchoolFilled
       );
     }
     if (step === 3 && personal.employment_status === 'Employed') {
+      const isAgencyFilled = employment.agency_code === 'OTHER'
+        ? (employment.customAgencyName && employment.customAgencyAddress)
+        : employment.agency_code;
       return (
         employment.job_title &&
         employment.years_in_agency >= 0 &&
-        employment.agency_code
+        isAgencyFilled
       );
     }
     return true;
@@ -272,7 +304,21 @@ export function useApplyForm() {
       const applicantId = `APP-${generateAlphaNumericId(8)}`;
       const applicationNo = `APPNO-${generateNumericId(5)}`;
 
-      // Step A: Insert Education Record
+      // Step A: Insert Education Record (Handle custom school write-in)
+      let targetSchoolCode = education.school_code;
+      if (education.school_code === 'OTHER') {
+        targetSchoolCode = `SCH-${generateAlphaNumericId(5)}`;
+        const { error: newSchoolErr } = await supabase
+          .from('schools')
+          .insert({
+            school_code: targetSchoolCode,
+            school_name: education.customSchoolName,
+            school_address: education.customSchoolAddress,
+            is_registered: false
+          });
+        if (newSchoolErr) throw new Error('Failed to register custom school: ' + newSchoolErr.message);
+      }
+
       const { error: eduErr } = await supabase
         .from('education_records')
         .insert({
@@ -285,12 +331,26 @@ export function useApplyForm() {
           program_title: education.program_title,
           major: education.major,
           inclusive_years: education.inclusive_years,
-          school_code: education.school_code
+          school_code: targetSchoolCode
         });
       if (eduErr) throw new Error('Failed to create Education Record: ' + eduErr.message);
 
-      // Step B: Insert Employment Record (if applicable)
+      // Step B: Insert Employment Record (Handle custom agency write-in)
       if (personal.employment_status === 'Employed' && empRecordId) {
+        let targetAgencyCode = employment.agency_code;
+        if (employment.agency_code === 'OTHER') {
+          targetAgencyCode = `AGE-${generateAlphaNumericId(5)}`;
+          const { error: newAgencyErr } = await supabase
+            .from('agencies')
+            .insert({
+              agency_code: targetAgencyCode,
+              agency_name: employment.customAgencyName,
+              agency_address: employment.customAgencyAddress,
+              is_registered: false
+            });
+          if (newAgencyErr) throw new Error('Failed to register custom employment agency: ' + newAgencyErr.message);
+        }
+
         const { error: empErr } = await supabase
           .from('employment_records')
           .insert({
@@ -298,7 +358,7 @@ export function useApplyForm() {
             job_title: employment.job_title,
             years_in_agency: employment.years_in_agency,
             appointment_status: employment.appointment_status,
-            agency_code: employment.agency_code
+            agency_code: targetAgencyCode
           });
         if (empErr) throw new Error('Failed to create Employment Record: ' + empErr.message);
       }
@@ -343,11 +403,36 @@ export function useApplyForm() {
         });
       if (appErr) throw new Error('Failed to submit Application details: ' + appErr.message);
 
-      // Step E: Insert Disabilities
+      // Step E: Insert Disabilities (Handle custom disability write-ins)
       const disabilityRecords = [];
-      if (disabilities.visual) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Visual Impairment', applicant_id: applicantId });
-      if (disabilities.hearing) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Hearing Impairment', applicant_id: applicantId });
-      if (disabilities.orthopedic) disabilityRecords.push({ disability_id: `DIS-${generateNumericId(5)}`, disability: 'Orthopedic', applicant_id: applicantId });
+      const finalSelectedDis = [...disabilities];
+      if (showCustomDisability && customDisability && customDisability.trim() !== '') {
+        const trimmedCustom = customDisability.trim();
+        finalSelectedDis.push(trimmedCustom);
+
+        // Check and insert into disability_lookups if not existing
+        const { data: existingDis } = await supabase
+          .from('disability_lookups')
+          .select('disability_code')
+          .eq('disability_name', trimmedCustom);
+
+        if (!existingDis || existingDis.length === 0) {
+          const customCode = `DIS-${generateAlphaNumericId(5)}`;
+          await supabase.from('disability_lookups').insert({
+            disability_code: customCode,
+            disability_name: trimmedCustom,
+            is_registered: false
+          });
+        }
+      }
+
+      for (const disName of finalSelectedDis) {
+        disabilityRecords.push({
+          disability_id: `DIS-${generateNumericId(5)}`,
+          disability: disName,
+          applicant_id: applicantId
+        });
+      }
 
       if (disabilityRecords.length > 0) {
         const { error: disErr } = await supabase
@@ -356,8 +441,26 @@ export function useApplyForm() {
         if (disErr) throw new Error('Failed to record disabilities: ' + disErr.message);
       }
 
-      // Step F: Insert Eligibility Proofs
+      // Step F: Insert Eligibility Proofs (Handle custom eligibility write-ins)
       if (eligibilityProofs.length > 0) {
+        for (const proof of eligibilityProofs) {
+          if (proof.isCustom) {
+            const { data: existingElg } = await supabase
+              .from('eligibility_lookups')
+              .select('eligibility_code')
+              .eq('eligibility_name', proof.title);
+
+            if (!existingElg || existingElg.length === 0) {
+              const customCode = `ELG-${generateAlphaNumericId(5)}`;
+              await supabase.from('eligibility_lookups').insert({
+                eligibility_code: customCode,
+                eligibility_name: proof.title,
+                is_registered: false
+              });
+            }
+          }
+        }
+
         const proofRecords = eligibilityProofs.map(proof => ({
           eligibility_proof_id: `ELIG-${generateNumericId(5)}`,
           eligibility_proof_title: proof.title,
@@ -413,6 +516,12 @@ export function useApplyForm() {
     employment,
     disabilities,
     setDisabilities,
+    customDisability,
+    setCustomDisability,
+    showCustomDisability,
+    setShowCustomDisability,
+    disabilityLookups,
+    eligibilityLookups,
     eligibilityProofs,
     newProof,
     setNewProof,

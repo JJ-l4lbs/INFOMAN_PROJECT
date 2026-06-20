@@ -71,18 +71,18 @@ export default function PersonalInfoForm({ personal, onChange }: PersonalInfoFor
         </div>
         <div className="form-group">
           <label className="form-label">Zip Code *</label>
-          <input type="text" name="zip_code" value={personal.zip_code} onChange={onChange} className="form-input" placeholder="e.g. 1008" required />
+          <input type="text" name="zip_code" value={personal.zip_code} onChange={onChange} className="form-input" placeholder="e.g. 1008" maxLength={4} pattern="\d{4}" inputMode="numeric" onKeyDown={(e) => { if (!/[\d\b]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) e.preventDefault(); }} required />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
         <div className="form-group">
           <label className="form-label">Mobile Number *</label>
-          <input type="tel" name="mobile_number" value={personal.mobile_number} onChange={onChange} className="form-input" placeholder="+639XXXXXXXXX" required />
+          <input type="tel" name="mobile_number" value={personal.mobile_number} onChange={onChange} className="form-input" placeholder="+639XXXXXXXXX" maxLength={13} inputMode="numeric" onKeyDown={(e) => { if (!/[\d\b+]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) e.preventDefault(); }} required />
         </div>
         <div className="form-group">
           <label className="form-label">Telephone Number</label>
-          <input type="tel" name="telephone_number" value={personal.telephone_number} onChange={onChange} className="form-input" placeholder="02-XXXX-XXXX" />
+          <input type="tel" name="telephone_number" value={personal.telephone_number} onChange={onChange} className="form-input" placeholder="02-XXXX-XXXX" maxLength={12} inputMode="numeric" onKeyDown={(e) => { if (!/[\d\b-]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) e.preventDefault(); }} />
         </div>
       </div>
 

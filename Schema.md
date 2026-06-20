@@ -184,7 +184,21 @@ CREATE TABLE IF NOT EXISTS eligibility_proofs (
     applicant_id VARCHAR(20) NOT NULL REFERENCES applicants(applicant_id) ON DELETE CASCADE
 );
 
--- 9. Add Status Column to applications table (For application tracking status)
+-- 9. Create disability_lookups Table
+CREATE TABLE IF NOT EXISTS disability_lookups (
+    disability_code VARCHAR(20) PRIMARY KEY,
+    disability_name VARCHAR(45) UNIQUE NOT NULL,
+    is_registered BOOLEAN DEFAULT true
+);
+
+-- 10. Create eligibility_lookups Table
+CREATE TABLE IF NOT EXISTS eligibility_lookups (
+    eligibility_code VARCHAR(20) PRIMARY KEY,
+    eligibility_name VARCHAR(45) UNIQUE NOT NULL,
+    is_registered BOOLEAN DEFAULT true
+);
+
+-- 11. Add Status Column to applications table (For application tracking status)
 -- NOTE: We extend applications to have a status column to track progress as requested in PID.md.
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'Pending';
 

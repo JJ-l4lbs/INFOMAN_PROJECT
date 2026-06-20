@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Search, Filter, PlusCircle, Loader2, ShieldAlert, Eye, Trash2 } from 'lucide-react';
+import { Search, Filter, PlusCircle, Loader2, ShieldAlert, Eye, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Application, Applicant, EducationRecord, EmploymentRecord, School, Agency } from '@/types';
 
 interface JoinResult extends Application {
@@ -24,6 +24,9 @@ interface ApplicationsTableProps {
   selectedApp: JoinResult | null;
   handleViewDetails: (app: JoinResult) => void;
   handleDeleteApplicant: (app: JoinResult) => void;
+  sortField: 'application_no' | 'name' | 'email' | 'exam_date' | 'status';
+  sortOrder: 'asc' | 'desc';
+  handleSort: (field: 'application_no' | 'name' | 'email' | 'exam_date' | 'status') => void;
 }
 
 export default function ApplicationsTable({
@@ -38,8 +41,19 @@ export default function ApplicationsTable({
   filteredApps,
   selectedApp,
   handleViewDetails,
-  handleDeleteApplicant
+  handleDeleteApplicant,
+  sortField,
+  sortOrder,
+  handleSort
 }: ApplicationsTableProps) {
+  const renderSortIcon = (field: 'application_no' | 'name' | 'email' | 'exam_date' | 'status') => {
+    if (sortField !== field) {
+      return <ArrowUpDown size={12} style={{ color: 'var(--text-muted)', marginLeft: '0.25rem', opacity: 0.6 }} />;
+    }
+    return sortOrder === 'asc'
+      ? <ArrowUp size={12} style={{ color: 'var(--color-primary)', marginLeft: '0.25rem' }} />
+      : <ArrowDown size={12} style={{ color: 'var(--color-primary)', marginLeft: '0.25rem' }} />;
+  };
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
       {/* Controls Bar */}
@@ -110,11 +124,36 @@ export default function ApplicationsTable({
           <table className="data-table">
             <thead>
               <tr>
-                <th>Ref No.</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Exam Date</th>
-                <th>Status</th>
+                <th onClick={() => handleSort('application_no')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Ref No.
+                    {renderSortIcon('application_no')}
+                  </div>
+                </th>
+                <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Name
+                    {renderSortIcon('name')}
+                  </div>
+                </th>
+                <th onClick={() => handleSort('email')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Email
+                    {renderSortIcon('email')}
+                  </div>
+                </th>
+                <th onClick={() => handleSort('exam_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Exam Date
+                    {renderSortIcon('exam_date')}
+                  </div>
+                </th>
+                <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    Status
+                    {renderSortIcon('status')}
+                  </div>
+                </th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>

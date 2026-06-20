@@ -66,7 +66,10 @@ export default function Admin() {
     handleOpenEditModal,
     fetchApplications,
     toast,
-    setToast
+    setToast,
+    sortField,
+    sortOrder,
+    handleSort
   } = useAdminDashboard();
 
   if (!isAuthenticated) {
@@ -115,6 +118,9 @@ export default function Admin() {
           selectedApp={selectedApp}
           handleViewDetails={handleViewDetails}
           handleDeleteApplicant={handleDeleteApplicant}
+          sortField={sortField}
+          sortOrder={sortOrder}
+          handleSort={handleSort}
         />
 
       </div>

@@ -43,6 +43,19 @@ export function useAdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
 
+  // Sorting
+  const [sortField, setSortField] = useState<'application_no' | 'name' | 'email' | 'exam_date' | 'status'>('application_no');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: 'application_no' | 'name' | 'email' | 'exam_date' | 'status') => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
   // Modal / Detailed View
   const [selectedApp, setSelectedApp] = useState<JoinResult | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -510,19 +523,55 @@ export function useAdminDashboard() {
     }
   };
 
-  // --- FILTERED RESULTS ---
-  const filteredApps = applications.filter(app => {
-    const matchesSearch = 
-      app.applicants?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.applicants?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.application_no?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = 
-      statusFilter === 'All' || 
-      app.status === statusFilter;
+  // --- FILTERED & SORTED RESULTS ---
+  const filteredApps = applications
+    .filter(app => {
+      const matchesSearch = 
+        app.applicants?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        app.applicants?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        app.application_no?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = 
+        statusFilter === 'All' || 
+        app.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      let aVal: any = '';
+      let bVal: any = '';
+
+      if (sortField === 'application_no') {
+        aVal = a.application_no || '';
+        bVal = b.application_no || '';
+      } else if (sortField === 'name') {
+        aVal = a.applicants?.name || '';
+        bVal = b.applicants?.name || '';
+      } else if (sortField === 'email') {
+        aVal = a.applicants?.email || '';
+        bVal = b.applicants?.email || '';
+      } else if (sortField === 'exam_date') {
+        aVal = a.exam_date || '';
+        bVal = b.exam_date || '';
+      } else if (sortField === 'status') {
+        aVal = a.status || '';
+        bVal = b.status || '';
+      }
+
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+      // Alphanumeric natural sort (e.g. APP-9 before APP-10)
+      if (sortField === 'application_no') {
+        return sortOrder === 'asc'
+          ? aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' })
+          : bVal.localeCompare(aVal, undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   return {
     isAuthenticated,
@@ -580,6 +629,9 @@ export function useAdminDashboard() {
     fetchApplications,
     toast,
     setToast,
-    showToast
+    showToast,
+    sortField,
+    sortOrder,
+    handleSort
   };
 }

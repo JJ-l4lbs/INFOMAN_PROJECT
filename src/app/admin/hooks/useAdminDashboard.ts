@@ -248,6 +248,20 @@ export function useAdminDashboard() {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      await Promise.all([
+        fetchApplications(),
+        fetchLookups(),
+        fetchAllAdminLookups()
+      ]);
+      showToast('All database records and lookup data refreshed.', 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Failed to refresh data: ' + (err.message || err), 'error');
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchApplications();
@@ -782,6 +796,7 @@ export function useAdminDashboard() {
     showCustomDisability,
     setShowCustomDisability,
     disabilityLookups,
-    eligibilityLookups
+    eligibilityLookups,
+    handleRefresh
   };
 }

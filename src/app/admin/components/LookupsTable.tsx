@@ -157,35 +157,37 @@ export default function LookupsTable({
           <table className="data-table">
             <thead>
               <tr>
-                <th onClick={() => handleSort('code')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    {getCodeHeader()} {renderSortIcon('code')}
-                  </div>
-                </th>
-                <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                {(type === 'schools' || type === 'agencies') && (
+                  <th onClick={() => handleSort('code')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                      {getCodeHeader()} {renderSortIcon('code')}
+                    </div>
+                  </th>
+                )}
+                <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
                     Name / Description {renderSortIcon('name')}
                   </div>
                 </th>
                 {(type === 'schools' || type === 'agencies') && (
-                  <th onClick={() => handleSort('address')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <th onClick={() => handleSort('address')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
                       Address {renderSortIcon('address')}
                     </div>
                   </th>
                 )}
-                <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
                     Registration Status {renderSortIcon('status')}
                   </div>
                 </th>
-                <th style={{ textAlign: 'center', width: '10%' }}>Actions</th>
+                <th style={{ textAlign: 'center', width: '10%', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {sortedData.length === 0 ? (
                 <tr>
-                  <td colSpan={(type === 'schools' || type === 'agencies') ? 5 : 4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
+                  <td colSpan={(type === 'schools' || type === 'agencies') ? 5 : 3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
                     No lookup records found.
                   </td>
                 </tr>
@@ -195,7 +197,9 @@ export default function LookupsTable({
                   const isRegistered = item.is_registered !== false;
                   return (
                     <tr key={code}>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{code}</td>
+                      {(type === 'schools' || type === 'agencies') && (
+                        <td style={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{code}</td>
+                      )}
                       <td style={{ fontWeight: 500 }}>{getName(item)}</td>
                       {(type === 'schools' || type === 'agencies') && <td>{getAddress(item)}</td>}
                       <td style={{ whiteSpace: 'nowrap' }}>

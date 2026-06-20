@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Database, LogOut } from 'lucide-react';
+import { Database, LogOut, RefreshCw } from 'lucide-react';
 import { useAdminDashboard } from './hooks/useAdminDashboard';
 
 import LoginGate from './components/LoginGate';
@@ -96,7 +96,8 @@ export default function Admin() {
     customDisability,
     setCustomDisability,
     showCustomDisability,
-    setShowCustomDisability
+    setShowCustomDisability,
+    handleRefresh
   } = useAdminDashboard();
 
   if (!isAuthenticated) {
@@ -124,9 +125,14 @@ export default function Admin() {
             Inspect, schedule, validate, or delete exam applicant registrations under strict Row Level Security.
           </p>
         </div>
-        <button onClick={handleLogout} className="btn btn-secondary" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.85rem' }}>
-          <LogOut size={16} /> Log Out
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button onClick={handleRefresh} className="btn btn-secondary" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.85rem' }} title="Refresh all table data and lookup lists">
+            <RefreshCw size={16} /> Refresh
+          </button>
+          <button onClick={handleLogout} className="btn btn-secondary" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.85rem' }}>
+            <LogOut size={16} /> Log Out
+          </button>
+        </div>
       </header>
 
       {/* View Switcher Tabs */}
